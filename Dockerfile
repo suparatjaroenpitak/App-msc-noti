@@ -11,6 +11,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # DATABASE_URL is only needed for `prisma generate`; no DB is contacted at build time.
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+# NEXT_PUBLIC_* vars are inlined into the client bundle at BUILD time.
+# On Render, set this env var (it flows into the build as a build arg below).
+ARG NEXT_PUBLIC_APP_URL
 RUN npx prisma generate && npm run build
 
 # ---------- runner ----------

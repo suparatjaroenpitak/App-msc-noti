@@ -1,0 +1,64 @@
+# Render Blueprint — deploy ทั้งระบบในคลิกเดียว
+# ใช้: Render Dashboard → New → Blueprint → เลือก repo นี้
+# หรือ: push render.yaml ขึ้น repo แล้ว Render จะจับอัตโนมัติ
+#
+# Blueprint นี้จะสร้าง:
+#   1. stock-alert-db        (PostgreSQL 16)
+#   2. stock-alert-web       (Docker web service — รัน migrate + seed + start)
+#   3. stock-alert-worker    (Docker background worker — poll ราคาทุก 60 วิ)
+#
+# ค่าที่ต้องกรอกตอน provision (sync = กรอกในหน้า dashboard):
+#   - authSecret      : openssl rand -base64 32
+#   - vapidPublicKey / vapidPrivateKey : npx web-push generate-vapid-keys
+
+databases:
+  - name: stock-alert-db
+    databaseName: stock_alert
+    user: stock_alert
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: stock-alert-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stock-alert-db
+          property: connectionString
+      - key: AUTH_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://stock-alert-web.onrender.com   # TODO: แก้เป็นโดเมนจริงหลัง deploy แรก
+      - key: MARKET_DATA_PROVIDER
+        value: mock          # TODO: เปลี่ยนเป็น provider จริงก่อนใช้งานจริง
+      - key: POLLING_INTERVAL_SECONDS
+        value: "60"
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@example.com
+
+  - type: worker
+    name: stock-alert-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: sh -c "npx tsx worker/index.ts"
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stock-alert-db
+          property: connectionString
+      - key: MARKET_DATA_PROVIDER
+        value: mock
+      - key: POLLING_INTERVAL_SECONDS
+        value: "60"

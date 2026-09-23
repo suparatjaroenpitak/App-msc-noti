@@ -1,13 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// analysis.ts imports the Prisma singleton at module scope — mock it out.
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+
 import { assertSafeOllamaUrl } from "@/lib/ai/client";
 import { parseSuggestion } from "@/lib/ai/analysis";
 
-const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
-function setNodeEnv(value: string | undefined): void {
-  Object.defineProperty(process.env, "NODE_ENV", { value, configurable: true, writable: true });
+function setNodeEnv(value: string): void {
+  vi.stubEnv("NODE_ENV", value);
 }
 afterEach(() => {
-  setNodeEnv(ORIGINAL_NODE_ENV);
+  vi.unstubAllEnvs();
 });
 
 describe("assertSafeOllamaUrl (SSRF guard)", () => {

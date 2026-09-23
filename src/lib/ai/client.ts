@@ -11,18 +11,27 @@ export function assertSafeOllamaUrl(raw: string): URL {
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     throw new HttpError(400, "BAD_REQUEST", "ต้องใช้ http/https เท่านั้น");
   }
-  if (u.username || u.password || (u.port && u.port !== "80" && u.port !== "443")) {
-    throw new HttpError(400, "BAD_REQUEST", "ไม่อนุญาต URL ที่มี credentials หรือ port พิเศษ");
+  if (u.username || u.password) {
+    throw new HttpError(400, "BAD_REQUEST", "ไม่อนุญาต URL ที่มี credentials");
   }
   if (u.pathname !== "/" && u.pathname !== "") {
     throw new HttpError(400, "BAD_REQUEST", "ต้องเป็น base URL เท่านั้น (ไม่ต้องมี path)");
   }
 
   const host = u.hostname.toLowerCase();
-  const allowedSuffixes = ["trycloudflare.com", "loca.lt", "ngrok-free.app", "ngrok.io", "colab.ngrok.io", "ngrok.io"];
+  const port = u.port || (u.protocol === "https:" ? "443" : "80");
+  const allowedSuffixes = ["trycloudflare.com", "loca.lt", "ngrok-free.app", "ngrok.io", "colab.ngrok.io"];
   const isAllowedTunnel = allowedSuffixes.some((s) => host === s || host.endsWith("." + s));
   const isLocalhost = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "0.0.0.0";
   const isDev = process.env.NODE_ENV !== "production";
+
+  // Local dev Ollama may use its default port; tunnels must use standard ports.
+  if (!isDev && isAllowedTunnel && port !== "80" && port !== "443") {
+    throw new HttpError(400, "BAD_REQUEST", "Tunnel URL ต้องใช้ port 80/443 เท่านั้น");
+  }
+  if (isLocalhost && port !== "80" && port !== "443" && port !== "11434" && !isDev) {
+    throw new HttpError(400, "BAD_REQUEST", "ไม่อนุญาต port พิเศษ");
+  }
 
   // Production: only HTTPS tunnel hosts. Development: also allow local Ollama.
   if (!isDev) {
