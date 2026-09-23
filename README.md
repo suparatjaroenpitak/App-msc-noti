@@ -143,18 +143,31 @@ docker compose up -d --build
 > **P3009: migrate found failed migrations** — เคยมี migration รันแล้วล้มค้างอยู่ใน DB
 > ทำให้ migration ใหม่ไม่ถูก apply แก้ได้ 2 ทาง:
 >
-> **ทาง 1 (DB ยังไม่มีข้อมูลจริง — เร็วสุด):** รันคำสั่งนี้จากเครื่องคุณ (มี DATABASE_URL ของ Render แล้ว run):
+> **ทาง 1 (DB ยังไม่มีข้อมูลจริง — แนะนำ): ให้ deploy ซ่อมตัวเอง** — start command ของ image ใช้ `scripts/safe-migrate.mjs`
+> ที่จับ P3009 แล้ว reset schema + apply migration ใหม่ให้เองเมื่อเปิด flag:
+> ```text
+> Render → Service → Environment → เพิ่ม:
+>   DB_AUTO_RECOVER = true     (ล้าง schema + migrate ใหม่ — DROP ทุกตาราง!)
+>   FRESH_DB_SEED  = true      (seed ข้อมูลเริ่มต้น demo user + assets)
+> แล้วกด Save Changes → redeploy → พอ deploy ผ่านแล้ว "ลบสองตัวแปรนี้ทิ้ง" ทันที
+> ```
+>
+> **ทาง 2: รันจากเครื่องคุณเอง** (เมื่อไม่อยาก redeploy):
 > ```bash
 > DATABASE_URL="<Internal Database URL ของ Render>" sh scripts/reset-migrations.sh
 > ```
-> สคริปต์จะล้าง migration history + ตารางเก่า → apply `0_init` ใหม่ → seed แล้วให้ redeploy บน Render อีกครั้ง
 >
-> **ทาง 2 (มีข้อมูลจริงแล้ว ห้าม reset):** ทำให้ migration ที่ fail สำเร็จก่อน แล้ว mark:
+> **ทาง 3 (DB มีข้อมูลจริงแล้ว — ห้าม reset):** mark migration ที่ fail แล้ว deploy ใหม่:
 > ```bash
-> npx prisma migrate resolve --applied <ชื่อ-migration-ที่-fail>
-> npx prisma migrate deploy
+> npx prisma migrate resolve --rolled-back <ชื่อ-migration-ที่-fail>
 > ```
-> (หรือแก้ SQL ที่ fail แล้ว apply เอง — ดู https://pris.ly/d/migrate-resolve)
+> (ดู https://pris.ly/d/migrate-resolve)
+>
+> **⚠️ กับดักที่พบจริง: วางคำสั่งทั้งบรรทัดลงช่อง DATABASE_URL**
+> ถ้า log แสดงชื่อ database เพี้ยน เช่น `database "msc_stock%20sh%20scripts/reset-migrations.sh"`
+> แปลว่ามีคนวาง `DATABASE_URL="..." sh scripts/reset-migrations.sh` ทั้งบรรทัดลงช่อง Environment Variable
+> บน Render — **ช่อง DATABASE_URL ให้ใส่แค่ URL เท่านั้น** เช่น
+> `postgresql://user:pass@host/db` (ตัด `"` และคำสั่งอื่นออกทั้งหมด)
 
 **วิธีที่ 2: Manual (Docker runtime)**
 

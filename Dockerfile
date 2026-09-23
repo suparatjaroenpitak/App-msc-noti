@@ -28,6 +28,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/worker ./worker
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
@@ -36,4 +37,7 @@ RUN chown -R app:app /app
 USER app
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+# safe-migrate: รัน `prisma migrate deploy` และถ้าเจอ P3009 (failed migration ค้าง)
+# จะแนะนำวิธีแก้ หรือ auto-repair (ล้าง schema + apply ใหม่) เมื่อ DB_AUTO_RECOVER=true
+# FRESH_DB_SEED=true จะ seed ข้อมูลเริ่มต้น (demo user + assets) — ปิดหลังใช้งานจริง
+CMD ["sh", "-c", "node scripts/safe-migrate.mjs && node scripts/seed-if-fresh.mjs && npm run start"]

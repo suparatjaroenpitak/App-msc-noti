@@ -26,8 +26,8 @@ services:
     plan: free
     healthCheckPath: /api/health
     autoDeploy: true
-    # Start command runs migrations + seed + starts Next.js (idempotent).
-    dockerCommand: sh -c "npx prisma migrate deploy && npx tsx prisma/seed.ts && npm run start"
+    # Start command: migrate (มี auto-repair เมื่อ P3009 + DB_AUTO_RECOVER=true) → seed (opt-in) → Next.js
+    dockerCommand: sh -c "node scripts/safe-migrate.mjs && node scripts/seed-if-fresh.mjs && npm run start"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -47,6 +47,13 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:admin@example.com
+      # ตั้ง true เฉพาะเมื่อติด P3009 (failed migration ค้าง) — จะล้าง schema แล้ว migrate ใหม่
+      # ⚠️ DROP ทุกตาราง — ใช้เฉพาะ DB ที่ยังไม่มีข้อมูลจริง — ปิดหลัง deploy สำเร็จ
+      - key: DB_AUTO_RECOVER
+        sync: false
+      # ตั้ง true เพื่อ seed ข้อมูลเริ่มต้น (demo user + assets) — ปิดหลัง deploy สำเร็จ
+      - key: FRESH_DB_SEED
+        sync: false
 
   - type: worker
     name: stock-alert-worker
