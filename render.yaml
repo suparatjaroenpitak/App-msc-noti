@@ -26,6 +26,8 @@ services:
     plan: free
     healthCheckPath: /api/health
     autoDeploy: true
+    # Start command runs migrations + seed + starts Next.js (idempotent).
+    dockerCommand: sh -c "npx prisma migrate deploy && npx tsx prisma/seed.ts && npm run start"
     envVars:
       - key: DATABASE_URL
         fromDatabase:

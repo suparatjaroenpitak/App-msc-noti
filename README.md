@@ -122,6 +122,30 @@ docker compose up -d --build
 # app ที่ http://localhost:3000 — migrate + seed รันอัตโนมัติ
 ```
 
+### Render (แนะนำ — มี Blueprint ใน repo แล้ว)
+
+**วิธีที่ 1: Blueprint (อัตโนมัติทั้ง DB + Web + Worker)**
+
+1. Push repo นี้ขึ้น GitHub (มี `render.yaml`)
+2. Render Dashboard → **New → Blueprint** → เลือก repo
+3. Render จะ provision Postgres + Web Service + Worker และ wire `DATABASE_URL` ให้อัตโนมัติ
+4. กรอกค่าที่ถาม: `AUTH_SECRET` (จาก `openssl rand -base64 32`), VAPID keys (จาก `npx web-push generate-vapid-keys`)
+5. Deploy เสร็จ → แก้ `NEXT_PUBLIC_APP_URL` เป็น URL จริง → **Manual Deploy** อีกครั้ง (NEXT_PUBLIC ต้อง rebuild)
+
+> ⚠️ ข้อผิดพลาดที่พบบ่อย: `P1012: Environment variable not found: DATABASE_URL` ตอน deploy
+> = service ยังไม่มี env var นี้ ให้ไปที่ Service → **Environment** → เพิ่ม `DATABASE_URL`
+> (คัดลอกจากหน้า Postgres instance → Internal Database URL) แล้ว redeploy
+> ถ้าใช้ Blueprint จะถูกตั้งให้อัตโนมัติผ่าน `fromDatabase`
+
+**วิธีที่ 2: Manual (Docker runtime)**
+
+1. New → **PostgreSQL** → สร้าง DB แล้วคัดลอก **Internal Database URL**
+2. New → **Web Service** → เชื่อม repo → Runtime: **Docker**
+3. ก่อนกด Create: เพิ่ม Environment Variables ให้ครบตามตารางข้างบน (`DATABASE_URL` ใส่ Internal URL ที่คัดลอกไว้)
+4. Web Service อีกตัว (หรือ Background Worker) สำหรับ worker:
+   - Docker Command: `npx tsx worker/index.ts`
+   - Env เดียวกัน (`DATABASE_URL`, `MARKET_DATA_PROVIDER`, `POLLING_INTERVAL_SECONDS`)
+
 ### Vercel
 
 1. Import repo → ตั้ง env ทั้งหมดจาก .env.example (+CRON_SECRET)
