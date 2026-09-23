@@ -81,6 +81,33 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
         },
       });
 
+      // Optional AI analysis (user's own Ollama on Colab) — runs BEFORE the push
+      // so the AI's summary/next-entry suggestion rides along in the notification.
+      // AI errors must never break the alert pipeline.
+      let aiSummary: string | null = null;
+      const aiSettings = await prisma.aiSettings.findUnique({ where: { userId: rule.userId } });
+      if (aiSettings?.enabled && aiSettings.analyzeOnTrigger) {
+        try {
+          const { analyzeTrigger } = await import("@/lib/ai/analysis");
+          const ai = await analyzeTrigger({
+            userId: rule.userId,
+            symbol: rule.asset.symbol,
+            assetId: rule.assetId,
+            alertRuleId: rule.id,
+            alertEventId: alertEvent.id,
+            assetName: rule.asset.name,
+            assetType: rule.asset.type,
+            currentPrice: price,
+            targetPrice: target,
+            condition: rule.condition,
+            currency: rule.asset.currency,
+          });
+          if (ai.summary) aiSummary = ai.summary;
+        } catch (err) {
+          console.error(`[worker] AI analysis failed for rule ${rule.id}:`, err instanceof Error ? err.message : err);
+        }
+      }
+
       const { sent, failed } = await sendAlertNotification({
         userId: rule.userId,
         alertRuleId: rule.id,
@@ -91,7 +118,11 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
         currentPrice: price,
         targetPrice: target,
         condition: rule.condition,
-        customMessage: rule.notificationMessage,
+        customMessage: rule.notificationMessage
+          ? `${rule.notificationMessage}${aiSummary ? `\n🤖 AI: ${aiSummary}` : ""}`
+          : aiSummary
+            ? `🤖 AI: ${aiSummary}`
+            : null,
         triggeredAt: new Date(),
       });
 
