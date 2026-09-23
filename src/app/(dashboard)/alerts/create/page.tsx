@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { Search } from "lucide-react";
+import { Bot, Loader2, Search } from "lucide-react";
 import { apiFetch, ApiClientError } from "@/lib/api/client";
 import { Card, CardHeader, CardBody, Button, Input, Label, Select, Textarea } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -38,7 +38,52 @@ function CreateAlertForm() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [sounds, setSounds] = useState<Sound[]>([]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiHint, setAiHint] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const askAi = async () => {
+    if (!asset) {
+      toast.push("error", "เลือกหุ้นก่อน แล้วค่อยให้ AI แนะนำราคา");
+      return;
+    }
+    setAiBusy(true);
+    setAiHint(null);
+    try {
+      const r = await apiFetch<{
+        suggestion: {
+          suggestedEntryPrice: number; suggestedStopPrice: number | null; suggestedTargetPrice: number | null;
+          confidence: number | null; verdict: string | null; rationale: string | null; model: string;
+        };
+      }>("/api/ai/suggest-price", {
+        method: "POST",
+        body: JSON.stringify({ symbol: asset.symbol }),
+      });
+      const s = r.suggestion;
+      setValue("targetPrice", String(s.suggestedEntryPrice));
+      setValue("condition", s.suggestedEntryPrice >= currentPriceForSuggest ? "ABOVE_OR_EQUAL" : "BELOW_OR_EQUAL");
+      setValue("cooldownMinutes", "60");
+      setAiHint(
+        `🤖 ${s.model}: จุดเข้าแนะนำ ${s.suggestedEntryPrice.toFixed(2)} USD` +
+          (s.suggestedStopPrice ? ` · stop ${s.suggestedStopPrice.toFixed(2)}` : "") +
+          (s.verdict ? ` · ${s.verdict}` : "") +
+          (s.rationale ? `\n${s.rationale}` : ""),
+      );
+    } catch (e) {
+      toast.push("error", e instanceof ApiClientError ? e.message : "AI แนะนำราคาไม่สำเร็จ");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  // Rough current price for condition heuristic — cheap: reuse search metadata via quote endpoint.
+  const [currentPriceForSuggest, setCurrentPriceForSuggest] = useState(0);
+  useEffect(() => {
+    if (!asset) return;
+    apiFetch<{ quote: { price: number } }>(`/api/market/quote/${asset.symbol}`)
+      .then((d) => setCurrentPriceForSuggest(d.quote.price))
+      .catch(() => undefined);
+  }, [asset]);
 
   // Resolve prefill symbol to an asset id.
   useEffect(() => {
@@ -183,14 +228,30 @@ function CreateAlertForm() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="targetPrice">ราคาเป้าหมาย (USD)</Label>
-              <Input id="targetPrice" type="number" step="0.01" min="0.01" placeholder="180.00" {...register("targetPrice", {
-                required: "กรุณากรอกราคาเป้าหมาย",
-                validate: (v) => Number(v) > 0 || "ราคาต้องมากกว่า 0",
-              })} />
-              {errors.targetPrice ? <p className="mt-1 text-xs text-red-600">{errors.targetPrice.message}</p> : null}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="targetPrice" className="mb-0">ราคาเป้าหมาย (USD)</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => void askAi()}
+              disabled={aiBusy || !asset}
+              title="ให้ AI (Ollama) วิเคราะห์และแนะนำราคาเข้า"
+            >
+              {aiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
+              {aiBusy ? "AI กำลังวิเคราะห์…" : "AI แนะนำราคา"}
+            </Button>
+          </div>
+          <Input id="targetPrice" type="number" step="0.01" min="0.01" placeholder="180.00" {...register("targetPrice", {
+            required: "กรุณากรอกราคาเป้าหมาย",
+            validate: (v) => Number(v) > 0 || "ราคาต้องมากกว่า 0",
+          })} />
+          {aiHint ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs whitespace-pre-line text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+              {aiHint}
             </div>
+          ) : null}
+          {errors.targetPrice ? <p className="mt-1 text-xs text-red-600">{errors.targetPrice.message}</p> : null}
             <div>
               <Label htmlFor="cooldown">Cooldown (นาที) — ช่วงเว้นหลัง trigger</Label>
               <Input id="cooldown" type="number" min="0" max="10080" {...register("cooldownMinutes")} />

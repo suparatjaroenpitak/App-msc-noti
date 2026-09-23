@@ -81,6 +81,30 @@ npm run test:e2e     # Playwright E2E (ต้องรัน dev + DB + seed ก
 - iOS PWA ใช้เสียงระบบเสมอ; Android Chrome ควบคุมเสียงไม่ได้จาก payload
 - ระบบนี้ fallback เป็น system sound อัตโนมัติ และแสดง Browser Limitation Notice ในหน้า Sounds แล้ว
 
+## 🤖 AI วิเคราะห์หุ้น (Ollama on Google Colab)
+
+ผู้ใช้เชื่อม Ollama ส่วนตัวที่รันบน **Google Colab GPU ฟรี** เพื่อให้ AI:
+
+1. **แนะนำราคาเข้าอัตโนมัติ** — ในหน้าสร้าง Alert กดปุ่ม "🤖 AI แนะนำราคา" ระบบจะส่งข้อมูลราคา (symbol, ราคาปัจจุบัน, high/low, prevClose, ราคาล่าสุด) ให้โมเดลวิเคราะห์ แล้วเติมราคาเป้าหมาย/เงื่อนไขให้เอง — **ผู้ใช้ไม่ต้องกำหนดราคาเอง**
+2. **วิเคราะห์เมื่อ Alert trigger** — เปิด `analyzeOnTrigger` แล้วเมื่อราคะถึงเงื่อนไข worker จะให้ AI วิเคราะห์ "ควรทำอย่างไรต่อ" พร้อมจุดเข้าใหม่ แนบไปใน push notification
+3. **ดูประวัติ AI** — ทุกการวิเคราะห์ถูกเก็บใน `AiAnalysis` แสดงเป็นการ์ดในหน้าหุ้น
+
+### การเชื่อมต่อ (3 ขั้นตอน)
+
+```bash
+# 1) เปิด colab/ollama_server.ipynb ใน Google Colab (เลือก T4 GPU)
+# 2) รันทุก cell → ได้ URL https://xxxx.trycloudflare.com
+# 3) แอป → Settings → AI → วาง URL → ทดสอบ → เลือกโมเดล → บันทึก
+```
+
+### ข้อจำกัดที่ต้องรู้
+
+- Colab เซสชันมีอายุจำกัด (idle ~90 นาที) — URL tunnel เปลี่ยนทุกครั้งที่รันใหม่ ต้องมาอัปเดตใน Settings
+- ระบบยอมรับเฉพาะ tunnel domains (trycloudflare / ngrok / localtunnel) เพื่อกัน SSRF — localhost เฉพาะ dev
+- ส่งไปให้โมเดลมีเพียง symbol + ตัวเลขราคา (ไม่มีข้อมูลส่วนตัว) และโมเดลรันบน Ollama ของผู้ใช้เอง
+- **ผลวิเคราะห์จาก AI ใช้เป็นข้อมูลประกอบเท่านั้น — ไม่ใช่คำแนะนำการลงทุน ไม่รับประกันความถูกต้อง**
+- AI ล้มเหลว = alert pipeline ยังทำงานปกติ (push ส่งโดยไม่มีส่วน AI)
+
 ## Background Worker และ Serverless
 
 Worker ปกติ (`npm run worker`) เป็น long-running process — เหมาะกับ VPS/Docker/Railway/Render/Fly

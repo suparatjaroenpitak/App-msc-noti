@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Download, ShieldCheck, User, Activity } from "lucide-react";
+import { Bell, Download, ShieldCheck, User, Activity, Bot } from "lucide-react";
 import { Card, CardHeader, CardBody } from "@/components/ui";
 import { useSystemStatus } from "@/hooks/use-market-status";
 
@@ -35,6 +35,19 @@ export default function SettingsPage() {
                 <p className="text-sm text-neutral-500">Push, ประเภท Alert, เสียงเริ่มต้น, ระดับเสียง</p>
               </div>
               <Bell className="h-5 w-5 text-neutral-400" />
+            </CardBody>
+          </Card>
+        </Link>
+
+        <Link href="/settings/ai" className="block">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardBody className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40"><Bot className="h-5 w-5 text-blue-600 dark:text-blue-300" /></div>
+              <div className="flex-1">
+                <p className="font-semibold">AI วิเคราะห์หุ้น (Ollama on Colab)</p>
+                <p className="text-sm text-neutral-500">เชื่อมต่อ Ollama ของคุณ ให้ AI แนะนำราคาเข้า</p>
+              </div>
+              <Bot className="h-5 w-5 text-neutral-400" />
             </CardBody>
           </Card>
         </Link>
