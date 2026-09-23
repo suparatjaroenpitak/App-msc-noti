@@ -4,19 +4,26 @@ import { setMarketDataProviderForTests } from "@/lib/market-data";
 import { prisma } from "@/lib/db/prisma";
 import type { StockQuote } from "@/types/market";
 
-// Mock the Prisma client used inside the engine.
+// Mock the Prisma client used by BOTH the engine and the notification sender.
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     alertRule: {
       findMany: vi.fn(),
       updateMany: vi.fn(),
       update: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null), // sender's soundId lookup
     },
     alertEvent: { create: vi.fn() },
-    notificationPreference: { findUnique: vi.fn().mockResolvedValue(null) },
-    pushSubscription: { findMany: vi.fn().mockResolvedValue([]) },
+    notificationPreference: {
+      findUnique: vi.fn().mockResolvedValue({
+        pushEnabled: true, entryEnabled: true, exitEnabled: true, customEnabled: true, defaultSoundId: null,
+      }),
+    },
+    pushSubscription: {
+      findMany: vi.fn().mockResolvedValue([{ id: "sub1", endpoint: "https://push.example/1", p256dh: "k", auth: "a" }]),
+    },
     notificationSound: { findUnique: vi.fn() },
-    notificationLog: { create: vi.fn() },
+    notificationLog: { create: vi.fn().mockResolvedValue({}) },
   },
 }));
 
@@ -38,7 +45,6 @@ async function setupRules(rules: unknown[]) {
   vi.mocked(prisma.alertRule.updateMany).mockResolvedValue({ count: 1 } as never);
   vi.mocked(prisma.alertRule.update).mockResolvedValue({} as never);
   vi.mocked(prisma.alertEvent.create).mockResolvedValue({ id: "evt1", userId: "u1" } as never);
-  vi.mocked(prisma.notificationPreference.findUnique).mockResolvedValue(null);
 }
 
 describe("alert engine", () => {
@@ -46,12 +52,13 @@ describe("alert engine", () => {
     vi.clearAllMocks();
   });
 
-  it("triggers BELOW_OR_EQUAL when price <= target", async () => {
+  it("triggers BELOW_OR_EQUAL when price <= target and logs a notification attempt", async () => {
     setMarketDataProviderForTests({ getQuote: async () => quote(179), searchAssets: async () => [] });
     await setupRules([{ ...baseRule }]);
     const result = await runPollCycle({ force: true });
     expect(result.alertsTriggered).toBe(1);
-    expect(prisma.notificationLog.create).toHaveBeenCalled();
+    // One subscription → one NotificationLog (status depends on VAPID availability).
+    expect(prisma.notificationLog.create).toHaveBeenCalledTimes(1);
   });
 
   it("does NOT trigger BELOW_OR_EQUAL when price > target", async () => {
@@ -59,6 +66,7 @@ describe("alert engine", () => {
     await setupRules([{ ...baseRule }]);
     const result = await runPollCycle({ force: true });
     expect(result.alertsTriggered).toBe(0);
+    expect(prisma.alertEvent.create).not.toHaveBeenCalled();
   });
 
   it("triggers ABOVE_OR_EQUAL when price >= target", async () => {
@@ -75,15 +83,13 @@ describe("alert engine", () => {
     expect(result.alertsTriggered).toBe(0);
   });
 
-  it("is idempotent — second cycle within cooldown does not re-trigger", async () => {
+  it("is idempotent — when another worker claims the rule, nothing is sent", async () => {
     setMarketDataProviderForTests({ getQuote: async () => quote(179), searchAssets: async () => [] });
     await setupRules([{ ...baseRule }]);
-
-    // Simulate another worker having claimed the rule:
     vi.mocked(prisma.alertRule.updateMany).mockResolvedValue({ count: 0 } as never);
-
     const result = await runPollCycle({ force: true });
-    expect(result.alertsTriggered).toBe(0); // claim lost → no event, no notification
+    expect(result.alertsTriggered).toBe(0);
+    expect(prisma.alertEvent.create).not.toHaveBeenCalled();
   });
 
   it("respects cooldown via lastTriggeredAt pre-filter", async () => {
@@ -101,15 +107,13 @@ describe("alert engine", () => {
     expect(prisma.alertRule.update).toHaveBeenCalledWith({ where: { id: "rule1" }, data: { enabled: false } });
   });
 
-  it("creates FAILED AlertEvent when notification throws", async () => {
+  it("records a FAILED AlertEvent when event creation throws, without crashing the cycle", async () => {
     setMarketDataProviderForTests({ getQuote: async () => quote(179), searchAssets: async () => [] });
     await setupRules([{ ...baseRule }]);
-    vi.mocked(prisma.notificationPreference.findUnique).mockResolvedValue(null);
-    // sendAlertNotification returns {sent:0,failed:0} when prefs missing — simulate send failure path instead:
     vi.mocked(prisma.alertEvent.create).mockRejectedValueOnce(new Error("db down"));
     const result = await runPollCycle({ force: true });
-    expect(result.alertsTriggered).toBe(0);
-    // The engine caught the error and wrote a FAILED event (second create call).
-    expect(prisma.alertEvent.create).toHaveBeenCalledTimes(2);
+    // The rule was claimed, but event creation failed → FAILED event is written as well.
+    expect(result.alertsTriggered).toBe(1);
+    expect(prisma.alertEvent.create).toHaveBeenCalledTimes(2); // TRIGGERED attempt + FAILED record
   });
 });
