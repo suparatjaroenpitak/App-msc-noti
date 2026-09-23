@@ -1,0 +1,226 @@
+// Stock Alert PWA — Prisma schema
+// Prices use Decimal(12,4). All timestamps are UTC (Prisma DateTime stored as timestamptz(3)).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetType {
+  STOCK
+  ETF
+}
+
+enum AlertType {
+  ENTRY
+  EXIT
+  CUSTOM
+}
+
+enum AlertCondition {
+  ABOVE_OR_EQUAL
+  BELOW_OR_EQUAL
+}
+
+enum AlertEventStatus {
+  TRIGGERED
+  FAILED
+}
+
+enum NotificationLogStatus {
+  SENT
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  image        String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  watchlistItems         WatchlistItem[]
+  alertRules             AlertRule[]
+  alertEvents            AlertEvent[]
+  pushSubscriptions      PushSubscription[]
+  notificationPreference NotificationPreference?
+  notificationSounds     NotificationSound[]
+  notificationLogs       NotificationLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  userAgent String?
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  symbol    String    @unique
+  name      String
+  exchange  String
+  type      AssetType
+  currency  String    @default("USD")
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  watchlistItems WatchlistItem[]
+  alertRules     AlertRule[]
+  alertEvents    AlertEvent[]
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@index([userId, sortOrder])
+}
+
+model AlertRule {
+  id                  String         @id @default(cuid())
+  userId              String
+  assetId             String
+  name                String
+  type                AlertType
+  condition           AlertCondition
+  targetPrice         Decimal        @db.Decimal(12, 4)
+  enabled             Boolean        @default(true)
+  oneTime             Boolean        @default(false)
+  cooldownMinutes     Int            @default(60)
+  notificationMessage String?
+  soundId             String?
+  lastTriggeredAt     DateTime?      @db.Timestamptz(3)
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset        Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  sound        NotificationSound?  @relation(fields: [soundId], references: [id], onDelete: SetNull)
+  alertEvents  AlertEvent[]
+
+  @@unique([userId, assetId, name])
+  @@index([userId, enabled])
+  @@index([assetId, enabled])
+}
+
+model AlertEvent {
+  id          String           @id @default(cuid())
+  alertRuleId String
+  userId      String
+  symbol      String
+  currentPrice Decimal         @db.Decimal(12, 4)
+  targetPrice  Decimal         @db.Decimal(12, 4)
+  triggeredAt DateTime         @default(now()) @db.Timestamptz(3)
+  status      AlertEventStatus
+  metadata    Json?
+
+  alertRule AlertRule @relation(fields: [alertRuleId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  notificationLogs NotificationLog[]
+
+  @@index([alertRuleId, triggeredAt])
+  @@index([userId, triggeredAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  deviceName String?
+  lastUsedAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationLogs NotificationLog[]
+}
+
+model NotificationPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  pushEnabled   Boolean  @default(true)
+  entryEnabled  Boolean  @default(true)
+  exitEnabled   Boolean  @default(true)
+  customEnabled Boolean  @default(true)
+  defaultSoundId String?
+  volume        Float    @default(0.8)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultSound NotificationSound? @relation(fields: [defaultSoundId], references: [id], onDelete: SetNull)
+}
+
+model NotificationSound {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  fileUrl   String
+  mimeType  String
+  fileSize  Int
+  duration  Float?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertRules            AlertRule[]
+  preferredByUsers      NotificationPreference[] @relation("defaultSound")
+}
+
+model NotificationLog {
+  id                String                @id @default(cuid())
+  userId            String
+  alertEventId      String?
+  pushSubscriptionId String?
+  title             String
+  body              String
+  status            NotificationLogStatus
+  errorMessage      String?
+  sentAt            DateTime              @default(now()) @db.Timestamptz(3)
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertEvent       AlertEvent?       @relation(fields: [alertEventId], references: [id], onDelete: SetNull)
+  pushSubscription PushSubscription? @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, sentAt])
+  @@index([alertEventId])
+}
