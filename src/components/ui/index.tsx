@@ -3,6 +3,9 @@
 import { cn } from "@/lib/utils";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode } from "react";
 
+export { ConfirmDialog } from "./confirm-dialog";
+export { ToastProvider, useToast } from "./toast";
+
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
 

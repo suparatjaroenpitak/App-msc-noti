@@ -91,7 +91,7 @@ describe("alert engine", () => {
   });
 
   it("disables one-time alert after triggering", async () => {
-    setMarketDataProviderForTests({ getQuote: async () => quote(179), searchAssets: await (async () => [])() });
+    setMarketDataProviderForTests({ getQuote: async () => quote(179), searchAssets: async () => [] });
     await setupRules([{ ...baseRule, oneTime: true }]);
     await runPollCycle({ force: true });
     expect(prisma.alertRule.update).toHaveBeenCalledWith({ where: { id: "rule1" }, data: { enabled: false } });

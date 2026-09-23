@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, notFound, badRequest } from "@/lib/api/response";
 import { requireUser, assertSameOrigin, ensureUserRateLimit } from "@/lib/api/handler";
-import { sendAlertNotification, sendTestNotification } from "@/lib/notifications/send";
+import { sendAlertNotification, buildAlertNotification } from "@/lib/notifications/send";
 import { getCachedQuote } from "@/lib/market-data";
 
 /**

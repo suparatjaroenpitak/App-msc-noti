@@ -17,6 +17,7 @@ type Quote = {
 type AlertRow = {
   id: string; name: string; type: "ENTRY" | "EXIT" | "CUSTOM";
   condition: "ABOVE_OR_EQUAL" | "BELOW_OR_EQUAL"; targetPrice: string | number; enabled: boolean; lastTriggeredAt: string | null;
+  asset: { symbol: string };
 };
 
 export default function AssetDetailPage() {

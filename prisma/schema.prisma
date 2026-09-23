@@ -94,7 +94,6 @@ model Asset {
 
   watchlistItems WatchlistItem[]
   alertRules     AlertRule[]
-  alertEvents    AlertEvent[]
 }
 
 model WatchlistItem {
@@ -154,6 +153,8 @@ model AlertEvent {
 
   notificationLogs NotificationLog[]
 
+  @@index([alertRuleId])
+
   @@index([alertRuleId, triggeredAt])
   @@index([userId, triggeredAt])
 }
@@ -186,7 +187,7 @@ model NotificationPreference {
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  defaultSound NotificationSound? @relation(fields: [defaultSoundId], references: [id], onDelete: SetNull)
+  defaultSound NotificationSound? @relation("defaultSound", fields: [defaultSoundId], references: [id], onDelete: SetNull)
 }
 
 model NotificationSound {
@@ -201,9 +202,9 @@ model NotificationSound {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  alertRules            AlertRule[]
-  preferredByUsers      NotificationPreference[] @relation("defaultSound")
+  user             User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertRules       AlertRule[]
+  preferredByUsers NotificationPreference[] @relation("defaultSound")
 }
 
 model NotificationLog {

@@ -16,7 +16,7 @@ type Prefs = {
   volume: number;
 };
 
-type Sound = { id: string; name: string };
+type Sound = { id: string; name: string; fileUrl: string };
 
 export default function NotificationSettingsPage() {
   const toast = useToast();
