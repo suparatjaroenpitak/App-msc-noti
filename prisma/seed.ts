@@ -116,6 +116,12 @@ async function main() {
     create: { userId: demo.id },
   });
 
+  await prisma.analysisSettings.upsert({
+    where: { userId: demo.id },
+    update: {},
+    create: { userId: demo.id },
+  });
+
   console.log(`Demo user ready: ${demoEmail} / demo1234`);
 }
 

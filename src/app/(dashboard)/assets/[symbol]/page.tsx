@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Bot, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, ArrowLeft, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip } from "recharts";
 import { apiFetch, ApiClientError } from "@/lib/api/client";
 import { Card, CardHeader, CardBody, Badge, Skeleton, EmptyState, Button } from "@/components/ui";
@@ -23,7 +23,7 @@ type AlertRow = {
 type AiAnalysisRow = {
   id: string; kind: "ON_TRIGGER" | "SUGGEST_PRICE"; verdict: "BUY" | "WAIT" | "AVOID" | null;
   suggestedEntryPrice: string | null; confidence: number | null; rationale: string | null;
-  model: string; ok: boolean; createdAt: string;
+  engine: string; ok: boolean; createdAt: string;
 };
 
 export default function AssetDetailPage() {
@@ -44,7 +44,7 @@ export default function AssetDetailPage() {
       setHistory((h) => [...h.slice(-59), { time: new Date().toLocaleTimeString(), price: data.quote.price }]);
       const a = await apiFetch<{ alerts: AlertRow[] }>("/api/alerts");
       setAlerts(a.alerts.filter((x) => x.asset.symbol === symbol));
-      apiFetch<{ analyses: AiAnalysisRow[] }>(`/api/ai/history?symbol=${symbol}&pageSize=3`)
+      apiFetch<{ analyses: AiAnalysisRow[] }>(`/api/analysis/history?symbol=${symbol}&pageSize=3`)
         .then((d) => setAiAnalyses(d.analyses))
         .catch(() => undefined);
       setError(null);
@@ -130,7 +130,7 @@ export default function AssetDetailPage() {
       {/* AI analyses */}
       {aiAnalyses !== null && aiAnalyses.length > 0 ? (
         <Card>
-          <CardHeader title="🤖 AI วิเคราะห์ล่าสุด" subtitle="จาก Ollama ส่วนตัวของคุณ — ใช้เป็นข้อมูลประกอบเท่านั้น ไม่ใช่คำแนะนำการลงทุน" />
+          <CardHeader title="📊 ผลวิเคราะห์ล่าสุด" subtitle="จาก Engine ในตัว (builtin-v1) — ใช้เป็นข้อมูลประกอบเท่านั้น ไม่ใช่คำแนะนำการลงทุน" />
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {aiAnalyses.map((a) => (
               <div key={a.id} className="px-5 py-3">
@@ -139,7 +139,7 @@ export default function AssetDetailPage() {
                     {a.kind === "ON_TRIGGER" ? "วิเคราะห์หลัง trigger" : "แนะนำจุดเข้า"}
                     {a.verdict ? <Badge tone={a.verdict === "BUY" ? "green" : a.verdict === "WAIT" ? "amber" : "red"} >{a.verdict}</Badge> : null}
                   </p>
-                  <span className="text-xs text-neutral-400">{a.model} · {timeAgo(a.createdAt)}</span>
+                  <span className="text-xs text-neutral-400">{a.engine} · {timeAgo(a.createdAt)}</span>
                 </div>
                 {a.suggestedEntryPrice ? (
                   <p className="mt-0.5 text-xs">จุดเข้าแนะนำ: <strong>{formatPrice(Number(a.suggestedEntryPrice))}</strong>

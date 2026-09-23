@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { Bot, Loader2, Search } from "lucide-react";
+import { Activity, Loader2, Search } from "lucide-react";
 import { apiFetch, ApiClientError } from "@/lib/api/client";
 import { Card, CardHeader, CardBody, Button, Input, Label, Select, Textarea } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -42,9 +42,9 @@ function CreateAlertForm() {
   const [aiHint, setAiHint] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const askAi = async () => {
+  const askEngine = async () => {
     if (!asset) {
-      toast.push("error", "เลือกหุ้นก่อน แล้วค่อยให้ AI แนะนำราคา");
+      toast.push("error", "เลือกหุ้นก่อน แล้วกดให้ระบบวิเคราะห์");
       return;
     }
     setAiBusy(true);
@@ -52,25 +52,27 @@ function CreateAlertForm() {
     try {
       const r = await apiFetch<{
         suggestion: {
+          engine: string;
+          verdict: string;
           suggestedEntryPrice: number; suggestedStopPrice: number | null; suggestedTargetPrice: number | null;
-          confidence: number | null; verdict: string | null; rationale: string | null; model: string;
+          confidence: number | null; rationale: string | null; indicators: { samples: number };
         };
-      }>("/api/ai/suggest-price", {
+      }>("/api/analysis/suggest-price", {
         method: "POST",
         body: JSON.stringify({ symbol: asset.symbol }),
       });
       const s = r.suggestion;
       setValue("targetPrice", String(s.suggestedEntryPrice));
       setValue("condition", s.suggestedEntryPrice >= currentPriceForSuggest ? "ABOVE_OR_EQUAL" : "BELOW_OR_EQUAL");
-      setValue("cooldownMinutes", "60");
       setAiHint(
-        `🤖 ${s.model}: จุดเข้าแนะนำ ${s.suggestedEntryPrice.toFixed(2)} USD` +
+        `📊 ${s.engine}: จุดเข้าแนะนำ ${s.suggestedEntryPrice.toFixed(2)} USD` +
           (s.suggestedStopPrice ? ` · stop ${s.suggestedStopPrice.toFixed(2)}` : "") +
-          (s.verdict ? ` · ${s.verdict}` : "") +
+          (s.suggestedTargetPrice ? ` · target ${s.suggestedTargetPrice.toFixed(2)}` : "") +
+          ` · ${s.verdict} · ใช้ข้อมูล ${s.indicators.samples} จุด` +
           (s.rationale ? `\n${s.rationale}` : ""),
       );
     } catch (e) {
-      toast.push("error", e instanceof ApiClientError ? e.message : "AI แนะนำราคาไม่สำเร็จ");
+      toast.push("error", e instanceof ApiClientError ? e.message : "วิเคราะห์ไม่สำเร็จ");
     } finally {
       setAiBusy(false);
     }
@@ -234,12 +236,12 @@ function CreateAlertForm() {
               type="button"
               size="sm"
               variant="secondary"
-              onClick={() => void askAi()}
+              onClick={() => void askEngine()}
               disabled={aiBusy || !asset}
               title="ให้ AI (Ollama) วิเคราะห์และแนะนำราคาเข้า"
             >
-              {aiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
-              {aiBusy ? "AI กำลังวิเคราะห์…" : "AI แนะนำราคา"}
+              {aiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
+              {aiBusy ? "กำลังวิเคราะห์…" : "ให้ระบบวิเคราะห์"}
             </Button>
           </div>
           <Input id="targetPrice" type="number" step="0.01" min="0.01" placeholder="180.00" {...register("targetPrice", {
