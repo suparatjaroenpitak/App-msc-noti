@@ -135,10 +135,26 @@ docker compose up -d --build
 4. กรอกค่าที่ถาม: `AUTH_SECRET` (จาก `openssl rand -base64 32`), VAPID keys (จาก `npx web-push generate-vapid-keys`)
 5. Deploy เสร็จ → แก้ `NEXT_PUBLIC_APP_URL` เป็น URL จริง → **Manual Deploy** อีกครั้ง (NEXT_PUBLIC ต้อง rebuild)
 
-> ⚠️ ข้อผิดพลาดที่พบบ่อย: `P1012: Environment variable not found: DATABASE_URL` ตอน deploy
-> = service ยังไม่มี env var นี้ ให้ไปที่ Service → **Environment** → เพิ่ม `DATABASE_URL`
-> (คัดลอกจากหน้า Postgres instance → Internal Database URL) แล้ว redeploy
-> ถ้าใช้ Blueprint จะถูกตั้งให้อัตโนมัติผ่าน `fromDatabase`
+> ⚠️ ข้อผิดพลาดที่พบบ่อยบน Render
+>
+> **P1012: Environment variable not found: DATABASE_URL** — service ยังไม่มี env var นี้
+> ไปที่ Service → **Environment** → เพิ่ม `DATABASE_URL` (คัดลอกจากหน้า Postgres → Internal Database URL) แล้ว redeploy
+>
+> **P3009: migrate found failed migrations** — เคยมี migration รันแล้วล้มค้างอยู่ใน DB
+> ทำให้ migration ใหม่ไม่ถูก apply แก้ได้ 2 ทาง:
+>
+> **ทาง 1 (DB ยังไม่มีข้อมูลจริง — เร็วสุด):** รันคำสั่งนี้จากเครื่องคุณ (มี DATABASE_URL ของ Render แล้ว run):
+> ```bash
+> DATABASE_URL="<Internal Database URL ของ Render>" sh scripts/reset-migrations.sh
+> ```
+> สคริปต์จะล้าง migration history + ตารางเก่า → apply `0_init` ใหม่ → seed แล้วให้ redeploy บน Render อีกครั้ง
+>
+> **ทาง 2 (มีข้อมูลจริงแล้ว ห้าม reset):** ทำให้ migration ที่ fail สำเร็จก่อน แล้ว mark:
+> ```bash
+> npx prisma migrate resolve --applied <ชื่อ-migration-ที่-fail>
+> npx prisma migrate deploy
+> ```
+> (หรือแก้ SQL ที่ fail แล้ว apply เอง — ดู https://pris.ly/d/migrate-resolve)
 
 **วิธีที่ 2: Manual (Docker runtime)**
 
