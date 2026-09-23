@@ -33,4 +33,4 @@ RUN chown -R app:app /app
 USER app
 
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

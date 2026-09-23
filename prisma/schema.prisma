@@ -36,6 +36,17 @@ enum NotificationLogStatus {
   FAILED
 }
 
+enum AiAnalysisKind {
+  ON_TRIGGER
+  SUGGEST_PRICE
+}
+
+enum AiVerdict {
+  BUY
+  WAIT
+  AVOID
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -54,6 +65,8 @@ model User {
   notificationPreference NotificationPreference?
   notificationSounds     NotificationSound[]
   notificationLogs       NotificationLog[]
+  aiSettings             AiSettings?
+  aiAnalyses             AiAnalysis[]
 }
 
 model Session {
@@ -70,12 +83,12 @@ model Session {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
-  expiresAt DateTime @db.Timestamptz(3)
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz(3)
   usedAt    DateTime? @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -94,6 +107,7 @@ model Asset {
 
   watchlistItems WatchlistItem[]
   alertRules     AlertRule[]
+  aiAnalyses     AiAnalysis[]
 }
 
 model WatchlistItem {
@@ -127,10 +141,10 @@ model AlertRule {
   createdAt           DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
 
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  asset        Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  sound        NotificationSound?  @relation(fields: [soundId], references: [id], onDelete: SetNull)
-  alertEvents  AlertEvent[]
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset       Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  sound       NotificationSound? @relation(fields: [soundId], references: [id], onDelete: SetNull)
+  alertEvents AlertEvent[]
 
   @@unique([userId, assetId, name])
   @@index([userId, enabled])
@@ -138,53 +152,53 @@ model AlertRule {
 }
 
 model AlertEvent {
-  id          String           @id @default(cuid())
-  alertRuleId String
-  userId      String
-  symbol      String
-  currentPrice Decimal         @db.Decimal(12, 4)
-  targetPrice  Decimal         @db.Decimal(12, 4)
-  triggeredAt DateTime         @default(now()) @db.Timestamptz(3)
-  status      AlertEventStatus
-  metadata    Json?
+  id           String           @id @default(cuid())
+  alertRuleId  String
+  userId       String
+  symbol       String
+  currentPrice Decimal          @db.Decimal(12, 4)
+  targetPrice  Decimal          @db.Decimal(12, 4)
+  triggeredAt  DateTime         @default(now()) @db.Timestamptz(3)
+  status       AlertEventStatus
+  metadata     Json?
 
   alertRule AlertRule @relation(fields: [alertRuleId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   notificationLogs NotificationLog[]
+  aiAnalyses       AiAnalysis[]
 
   @@index([alertRuleId])
-
   @@index([alertRuleId, triggeredAt])
   @@index([userId, triggeredAt])
 }
 
 model PushSubscription {
-  id        String   @id @default(cuid())
-  userId    String
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userAgent String?
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
   deviceName String?
   lastUsedAt DateTime @default(now()) @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   notificationLogs NotificationLog[]
 }
 
 model NotificationPreference {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  pushEnabled   Boolean  @default(true)
-  entryEnabled  Boolean  @default(true)
-  exitEnabled   Boolean  @default(true)
-  customEnabled Boolean  @default(true)
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  pushEnabled    Boolean  @default(true)
+  entryEnabled   Boolean  @default(true)
+  exitEnabled    Boolean  @default(true)
+  customEnabled  Boolean  @default(true)
   defaultSoundId String?
-  volume        Float    @default(0.8)
-  createdAt     DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  volume         Float    @default(0.8)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   defaultSound NotificationSound? @relation("defaultSound", fields: [defaultSoundId], references: [id], onDelete: SetNull)
@@ -202,26 +216,76 @@ model NotificationSound {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  user             User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   alertRules       AlertRule[]
   preferredByUsers NotificationPreference[] @relation("defaultSound")
 }
 
 model NotificationLog {
-  id                String                @id @default(cuid())
-  userId            String
-  alertEventId      String?
+  id                 String                @id @default(cuid())
+  userId             String
+  alertEventId       String?
   pushSubscriptionId String?
-  title             String
-  body              String
-  status            NotificationLogStatus
-  errorMessage      String?
-  sentAt            DateTime              @default(now()) @db.Timestamptz(3)
+  title              String
+  body               String
+  status             NotificationLogStatus
+  errorMessage       String?
+  sentAt             DateTime              @default(now()) @db.Timestamptz(3)
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   alertEvent       AlertEvent?       @relation(fields: [alertEventId], references: [id], onDelete: SetNull)
   pushSubscription PushSubscription? @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
 
   @@index([userId, sentAt])
+  @@index([alertEventId])
+}
+
+model AiSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  enabled          Boolean  @default(false)
+  analyzeOnTrigger Boolean  @default(false)
+  suggestOnCreate  Boolean  @default(true)
+  baseUrl          String
+  model            String   @default("llama3.1:8b")
+  timeoutSeconds   Int      @default(60)
+  temperature      Float    @default(0.2)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analyses AiAnalysis[]
+}
+
+model AiAnalysis {
+  id                   String         @id @default(cuid())
+  userId               String
+  assetId              String
+  alertEventId         String?
+  symbol               String
+  kind                 AiAnalysisKind
+  priceAtAnalysis      Decimal        @db.Decimal(12, 4)
+  model                String
+  verdict              AiVerdict?
+  suggestedEntryPrice  Decimal?       @db.Decimal(12, 4)
+  suggestedStopPrice   Decimal?       @db.Decimal(12, 4)
+  suggestedTargetPrice Decimal?       @db.Decimal(12, 4)
+  confidence           Float?
+  horizonDays          Int?
+  rationale            String?
+  rawResponse          String?
+  ok                   Boolean
+  error                String?
+  durationMs           Int?
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset        Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  alertEvent   AlertEvent? @relation(fields: [alertEventId], references: [id], onDelete: SetNull)
+  aiSettings   AiSettings? @relation(fields: [aiSettingsId], references: [id])
+  aiSettingsId String?
+
+  @@index([userId, createdAt])
+  @@index([symbol, createdAt])
   @@index([alertEventId])
 }
