@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.env
+.env.local
+data/sounds
+playwright-report
+test-results
