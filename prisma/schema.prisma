@@ -36,12 +36,12 @@ enum NotificationLogStatus {
   FAILED
 }
 
-enum AiAnalysisKind {
+enum AnalysisKind {
   ON_TRIGGER
   SUGGEST_PRICE
 }
 
-enum AiVerdict {
+enum AnalysisVerdict {
   BUY
   WAIT
   AVOID
@@ -65,8 +65,8 @@ model User {
   notificationPreference NotificationPreference?
   notificationSounds     NotificationSound[]
   notificationLogs       NotificationLog[]
-  aiSettings             AiSettings?
-  aiAnalyses             AiAnalysis[]
+  analysisSettings       AnalysisSettings?
+  analyses               Analysis[]
 }
 
 model Session {
@@ -107,7 +107,8 @@ model Asset {
 
   watchlistItems WatchlistItem[]
   alertRules     AlertRule[]
-  aiAnalyses     AiAnalysis[]
+  priceSamples   PriceSample[]
+  analyses       Analysis[]
 }
 
 model WatchlistItem {
@@ -166,11 +167,11 @@ model AlertEvent {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   notificationLogs NotificationLog[]
-  aiAnalyses       AiAnalysis[]
+  analyses         Analysis[]
 
-  @@index([alertRuleId])
   @@index([alertRuleId, triggeredAt])
   @@index([userId, triggeredAt])
+  @@index([alertRuleId])
 }
 
 model PushSubscription {
@@ -240,50 +241,63 @@ model NotificationLog {
   @@index([alertEventId])
 }
 
-model AiSettings {
+/// Per-user settings for the BUILT-IN analysis engine (no external AI service).
+model AnalysisSettings {
   id               String   @id @default(cuid())
   userId           String   @unique
-  enabled          Boolean  @default(false)
-  analyzeOnTrigger Boolean  @default(false)
+  enabled          Boolean  @default(true)
   suggestOnCreate  Boolean  @default(true)
-  baseUrl          String
-  model            String   @default("llama3.1:8b")
-  timeoutSeconds   Int      @default(60)
-  temperature      Float    @default(0.2)
+  analyzeOnTrigger Boolean  @default(false)
+  lookbackMinutes  Int      @default(240)
+  minSamples       Int      @default(12)
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime @updatedAt @db.Timestamptz(3)
 
-  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  analyses AiAnalysis[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model AiAnalysis {
-  id                   String         @id @default(cuid())
+/// Rolling price history captured by the worker — the fuel for the analysis engine.
+model PriceSample {
+  id        String   @id @default(cuid())
+  assetId   String
+  symbol    String
+  price     Decimal  @db.Decimal(12, 4)
+  volume    Int?
+  sampledAt DateTime @default(now()) @db.Timestamptz(3)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, sampledAt])
+  @@index([assetId, sampledAt])
+  @@index([sampledAt])
+}
+
+/// Output of the built-in analysis engine (replaces the old external-AI model).
+model Analysis {
+  id                   String           @id @default(cuid())
   userId               String
   assetId              String
   alertEventId         String?
   symbol               String
-  kind                 AiAnalysisKind
-  priceAtAnalysis      Decimal        @db.Decimal(12, 4)
-  model                String
-  verdict              AiVerdict?
-  suggestedEntryPrice  Decimal?       @db.Decimal(12, 4)
-  suggestedStopPrice   Decimal?       @db.Decimal(12, 4)
-  suggestedTargetPrice Decimal?       @db.Decimal(12, 4)
+  kind                 AnalysisKind
+  priceAtAnalysis      Decimal          @db.Decimal(12, 4)
+  engine               String           @default("builtin-v1")
+  verdict              AnalysisVerdict?
+  suggestedEntryPrice  Decimal?         @db.Decimal(12, 4)
+  suggestedStopPrice   Decimal?         @db.Decimal(12, 4)
+  suggestedTargetPrice Decimal?         @db.Decimal(12, 4)
   confidence           Float?
   horizonDays          Int?
   rationale            String?
-  rawResponse          String?
+  indicators           Json?
   ok                   Boolean
   error                String?
   durationMs           Int?
-  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
 
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  asset        Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  alertEvent   AlertEvent? @relation(fields: [alertEventId], references: [id], onDelete: SetNull)
-  aiSettings   AiSettings? @relation(fields: [aiSettingsId], references: [id])
-  aiSettingsId String?
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset      Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  alertEvent AlertEvent? @relation(fields: [alertEventId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([symbol, createdAt])
