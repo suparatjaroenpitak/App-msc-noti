@@ -65,6 +65,7 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
       data: { lastTriggeredAt: new Date(now) },
     });
     if (claimed.count === 0) continue; // another worker already claimed it
+    result.alertsTriggered += 1;
 
     try {
       // 1) Create the event + 2) send pushes + 3) one-time deactivation, atomically enough:

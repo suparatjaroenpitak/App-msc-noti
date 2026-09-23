@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runPollCycle } from "@/worker/alert-engine";
 import { setMarketDataProviderForTests } from "@/lib/market-data";
 import { prisma } from "@/lib/db/prisma";
@@ -42,6 +42,10 @@ async function setupRules(rules: unknown[]) {
 }
 
 describe("alert engine", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("triggers BELOW_OR_EQUAL when price <= target", async () => {
     setMarketDataProviderForTests({ getQuote: async () => quote(179), searchAssets: async () => [] });
     await setupRules([{ ...baseRule }]);

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { getCachedQuote, isMarketOpen } from "@/lib/market-data";
+import { getMarketDataProvider, isMarketOpen, withRetry } from "@/lib/market-data";
 
 export interface PolledQuote {
   symbol: string;
@@ -28,7 +28,8 @@ export async function pollActiveSymbols(options?: { force?: boolean }): Promise<
   await Promise.all(
     symbols.map(async (symbol) => {
       try {
-        const quote = await getCachedQuote(symbol); // getCachedQuote already retries
+        // Fresh price per cycle (no UI cache) — alert decisions need the latest value.
+        const quote = await withRetry(() => getMarketDataProvider().getQuote(symbol));
         results.set(symbol, quote.price);
       } catch (err) {
         // Error isolation per symbol: one bad symbol must not break the cycle.
