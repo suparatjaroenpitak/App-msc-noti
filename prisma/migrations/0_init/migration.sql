@@ -17,10 +17,10 @@ CREATE TYPE "AlertEventStatus" AS ENUM ('TRIGGERED', 'FAILED');
 CREATE TYPE "NotificationLogStatus" AS ENUM ('SENT', 'FAILED');
 
 -- CreateEnum
-CREATE TYPE "AiAnalysisKind" AS ENUM ('ON_TRIGGER', 'SUGGEST_PRICE');
+CREATE TYPE "AnalysisKind" AS ENUM ('ON_TRIGGER', 'SUGGEST_PRICE');
 
 -- CreateEnum
-CREATE TYPE "AiVerdict" AS ENUM ('BUY', 'WAIT', 'AVOID');
+CREATE TYPE "AnalysisVerdict" AS ENUM ('BUY', 'WAIT', 'AVOID');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -183,47 +183,56 @@ CREATE TABLE "NotificationLog" (
 );
 
 -- CreateTable
-CREATE TABLE "AiSettings" (
+CREATE TABLE "AnalysisSettings" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "enabled" BOOLEAN NOT NULL DEFAULT false,
-    "analyzeOnTrigger" BOOLEAN NOT NULL DEFAULT false,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
     "suggestOnCreate" BOOLEAN NOT NULL DEFAULT true,
-    "baseUrl" TEXT NOT NULL,
-    "model" TEXT NOT NULL DEFAULT 'llama3.1:8b',
-    "timeoutSeconds" INTEGER NOT NULL DEFAULT 60,
-    "temperature" DOUBLE PRECISION NOT NULL DEFAULT 0.2,
+    "analyzeOnTrigger" BOOLEAN NOT NULL DEFAULT false,
+    "lookbackMinutes" INTEGER NOT NULL DEFAULT 240,
+    "minSamples" INTEGER NOT NULL DEFAULT 12,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
-    CONSTRAINT "AiSettings_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AnalysisSettings_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "AiAnalysis" (
+CREATE TABLE "PriceSample" (
+    "id" TEXT NOT NULL,
+    "assetId" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "price" DECIMAL(12,4) NOT NULL,
+    "volume" INTEGER,
+    "sampledAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PriceSample_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Analysis" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "assetId" TEXT NOT NULL,
     "alertEventId" TEXT,
     "symbol" TEXT NOT NULL,
-    "kind" "AiAnalysisKind" NOT NULL,
+    "kind" "AnalysisKind" NOT NULL,
     "priceAtAnalysis" DECIMAL(12,4) NOT NULL,
-    "model" TEXT NOT NULL,
-    "verdict" "AiVerdict",
+    "engine" TEXT NOT NULL DEFAULT 'builtin-v1',
+    "verdict" "AnalysisVerdict",
     "suggestedEntryPrice" DECIMAL(12,4),
     "suggestedStopPrice" DECIMAL(12,4),
     "suggestedTargetPrice" DECIMAL(12,4),
     "confidence" DOUBLE PRECISION,
     "horizonDays" INTEGER,
     "rationale" TEXT,
-    "rawResponse" TEXT,
+    "indicators" JSONB,
     "ok" BOOLEAN NOT NULL,
     "error" TEXT,
     "durationMs" INTEGER,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "aiSettingsId" TEXT,
 
-    CONSTRAINT "AiAnalysis_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Analysis_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -260,13 +269,13 @@ CREATE INDEX "AlertRule_assetId_enabled_idx" ON "AlertRule"("assetId", "enabled"
 CREATE UNIQUE INDEX "AlertRule_userId_assetId_name_key" ON "AlertRule"("userId", "assetId", "name");
 
 -- CreateIndex
-CREATE INDEX "AlertEvent_alertRuleId_idx" ON "AlertEvent"("alertRuleId");
-
--- CreateIndex
 CREATE INDEX "AlertEvent_alertRuleId_triggeredAt_idx" ON "AlertEvent"("alertRuleId", "triggeredAt");
 
 -- CreateIndex
 CREATE INDEX "AlertEvent_userId_triggeredAt_idx" ON "AlertEvent"("userId", "triggeredAt");
+
+-- CreateIndex
+CREATE INDEX "AlertEvent_alertRuleId_idx" ON "AlertEvent"("alertRuleId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
@@ -281,16 +290,25 @@ CREATE INDEX "NotificationLog_userId_sentAt_idx" ON "NotificationLog"("userId", 
 CREATE INDEX "NotificationLog_alertEventId_idx" ON "NotificationLog"("alertEventId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AiSettings_userId_key" ON "AiSettings"("userId");
+CREATE UNIQUE INDEX "AnalysisSettings_userId_key" ON "AnalysisSettings"("userId");
 
 -- CreateIndex
-CREATE INDEX "AiAnalysis_userId_createdAt_idx" ON "AiAnalysis"("userId", "createdAt");
+CREATE INDEX "PriceSample_assetId_sampledAt_idx" ON "PriceSample"("assetId", "sampledAt");
 
 -- CreateIndex
-CREATE INDEX "AiAnalysis_symbol_createdAt_idx" ON "AiAnalysis"("symbol", "createdAt");
+CREATE INDEX "PriceSample_sampledAt_idx" ON "PriceSample"("sampledAt");
 
 -- CreateIndex
-CREATE INDEX "AiAnalysis_alertEventId_idx" ON "AiAnalysis"("alertEventId");
+CREATE UNIQUE INDEX "PriceSample_assetId_sampledAt_key" ON "PriceSample"("assetId", "sampledAt");
+
+-- CreateIndex
+CREATE INDEX "Analysis_userId_createdAt_idx" ON "Analysis"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Analysis_symbol_createdAt_idx" ON "Analysis"("symbol", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Analysis_alertEventId_idx" ON "Analysis"("alertEventId");
 
 -- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -341,17 +359,17 @@ ALTER TABLE "NotificationLog" ADD CONSTRAINT "NotificationLog_alertEventId_fkey"
 ALTER TABLE "NotificationLog" ADD CONSTRAINT "NotificationLog_pushSubscriptionId_fkey" FOREIGN KEY ("pushSubscriptionId") REFERENCES "PushSubscription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AiSettings" ADD CONSTRAINT "AiSettings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AnalysisSettings" ADD CONSTRAINT "AnalysisSettings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AiAnalysis" ADD CONSTRAINT "AiAnalysis_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "PriceSample" ADD CONSTRAINT "PriceSample_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "Asset"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AiAnalysis" ADD CONSTRAINT "AiAnalysis_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "Asset"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Analysis" ADD CONSTRAINT "Analysis_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AiAnalysis" ADD CONSTRAINT "AiAnalysis_alertEventId_fkey" FOREIGN KEY ("alertEventId") REFERENCES "AlertEvent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Analysis" ADD CONSTRAINT "Analysis_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "Asset"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AiAnalysis" ADD CONSTRAINT "AiAnalysis_aiSettingsId_fkey" FOREIGN KEY ("aiSettingsId") REFERENCES "AiSettings"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Analysis" ADD CONSTRAINT "Analysis_alertEventId_fkey" FOREIGN KEY ("alertEventId") REFERENCES "AlertEvent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

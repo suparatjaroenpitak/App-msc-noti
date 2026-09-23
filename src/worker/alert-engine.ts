@@ -46,8 +46,9 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
   const now = Date.now();
 
   for (const rule of rules) {
-    const price = quotes.get(rule.asset.symbol);
-    if (price === undefined) continue;
+    const quote = quotes.get(rule.asset.symbol);
+    if (!quote) continue;
+    const price = quote.price;
     const target = rule.targetPrice.toNumber();
 
     if (!conditionMet(rule.condition, price, target)) continue;
@@ -77,34 +78,30 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
           currentPrice: price,
           targetPrice: target,
           status: "TRIGGERED",
-          metadata: { condition: rule.condition, type: rule.type },
+          metadata: { condition: rule.condition, type: rule.type, priceAtTrigger: price },
         },
       });
 
-      // Optional AI analysis (user's own Ollama on Colab) — runs BEFORE the push
-      // so the AI's summary/next-entry suggestion rides along in the notification.
-      // AI errors must never break the alert pipeline.
+      // Optional BUILT-IN analysis (no external AI service) — runs BEFORE the push so
+      // the summary/next-entry suggestion rides along in the notification.
+      // Analysis errors must never break the alert pipeline.
       let aiSummary: string | null = null;
-      const aiSettings = await prisma.aiSettings.findUnique({ where: { userId: rule.userId } });
-      if (aiSettings?.enabled && aiSettings.analyzeOnTrigger) {
+      const analysisSettings = await prisma.analysisSettings.findUnique({ where: { userId: rule.userId } });
+      if (analysisSettings?.enabled && analysisSettings.analyzeOnTrigger) {
         try {
-          const { analyzeTrigger } = await import("@/lib/ai/analysis");
+          const { analyzeTrigger } = await import("@/lib/analysis/service");
           const ai = await analyzeTrigger({
             userId: rule.userId,
             symbol: rule.asset.symbol,
             assetId: rule.assetId,
-            alertRuleId: rule.id,
             alertEventId: alertEvent.id,
-            assetName: rule.asset.name,
-            assetType: rule.asset.type,
             currentPrice: price,
-            targetPrice: target,
-            condition: rule.condition,
-            currency: rule.asset.currency,
+            dayHigh: quote.dayHigh,
+            dayLow: quote.dayLow,
           });
           if (ai.summary) aiSummary = ai.summary;
         } catch (err) {
-          console.error(`[worker] AI analysis failed for rule ${rule.id}:`, err instanceof Error ? err.message : err);
+          console.error(`[worker] analysis failed for rule ${rule.id}:`, err instanceof Error ? err.message : err);
         }
       }
 
@@ -119,9 +116,9 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
         targetPrice: target,
         condition: rule.condition,
         customMessage: rule.notificationMessage
-          ? `${rule.notificationMessage}${aiSummary ? `\n🤖 AI: ${aiSummary}` : ""}`
+          ? `${rule.notificationMessage}${aiSummary ? `\n📊 ${aiSummary}` : ""}`
           : aiSummary
-            ? `🤖 AI: ${aiSummary}`
+            ? `📊 ${aiSummary}`
             : null,
         triggeredAt: new Date(),
       });
