@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { sendPush } from "@/lib/push/web-push";
-import type { AlertType } from "@prisma/client";
+import type { AlertType } from "@/types/enums";
 
 export interface SendAlertNotificationInput {
   userId: string;

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import type { AlertCondition, AlertType } from "@/types/enums";
 import { ok, toErrorResponse, notFound, badRequest } from "@/lib/api/response";
 import { requireUser, assertSameOrigin, ensureUserRateLimit } from "@/lib/api/handler";
 import { sendAlertNotification, buildAlertNotification } from "@/lib/notifications/send";
@@ -59,12 +60,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const payload = {
           userId: user.id,
           alertRuleId: alert.id,
-          alertType: alert.type,
+          alertType: alert.type as AlertType,
           symbol: alert.asset.symbol,
           assetName: alert.asset.name,
           currentPrice: quote.price,
-          targetPrice: alert.targetPrice.toNumber(),
-          condition: alert.condition,
+          targetPrice: alert.targetPrice,
+          condition: alert.condition as AlertCondition,
           customMessage: alert.notificationMessage,
           triggeredAt: new Date(),
         };

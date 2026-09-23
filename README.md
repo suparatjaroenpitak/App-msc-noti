@@ -3,7 +3,7 @@
 > ติดตามราคาหุ้นและ ETF สหรัฐฯ พร้อมระบบแจ้งเตือนตามเงื่อนไขของผู้ใช้
 > **ไม่ใช่คำแนะนำการลงทุน และไม่รับประกันผลกำไร**
 
-Next.js App Router · TypeScript Strict · Tailwind CSS · Prisma · PostgreSQL · Web Push (VAPID) · PWA
+Next.js App Router · TypeScript Strict · Tailwind CSS · Prisma · SQLite · Web Push (VAPID) · PWA
 
 ## ฟีเจอร์
 
@@ -40,12 +40,12 @@ npm install
 
 # 2) ตั้งค่า environment
 cp .env.example .env
-#   - แก้ DATABASE_URL ให้ตรงกับ Postgres ของคุณ
+#   - DATABASE_URL ชี้ที่ไฟล์ SQLite (default: file:./dev.db → prisma/dev.db) — สร้างเองอัตโนมัติ
 #   - สร้าง AUTH_SECRET: openssl rand -base64 32
 #   - สร้าง VAPID keys: npx web-push generate-vapid-keys
 
-# 3) สร้าง DB + seed
-npx prisma migrate dev --name init
+# 3) สร้าง DB + seed (SQLite — ใช้ migration ที่มีใน repo ได้เลย)
+npx prisma migrate dev
 npm run db:seed
 
 # 4) รันแอป + worker (สอง terminal)
@@ -123,6 +123,7 @@ Worker ปกติ (`npm run worker`) เป็น long-running process — เ
 ```bash
 docker compose up -d --build
 # app ที่ http://localhost:3000 — migrate + seed รันอัตโนมัติ
+# SQLite อยู่ที่ /app/data (docker volume "appdata") — app + worker รวมใน container เดียว
 ```
 
 ### Render (แนะนำ — มี Blueprint ใน repo แล้ว)
@@ -131,30 +132,30 @@ docker compose up -d --build
 
 1. Push repo นี้ขึ้น GitHub (มี `render.yaml`)
 2. Render Dashboard → **New → Blueprint** → เลือก repo
-3. Render จะ provision Postgres + Web Service + Worker และ wire `DATABASE_URL` ให้อัตโนมัติ
+3. Render จะ provision Web Service (Docker) — migrate + seed + app + worker รวมใน container เดียว (SQLite ในตัว ไม่มี Postgres)
 4. กรอกค่าที่ถาม: `AUTH_SECRET` (จาก `openssl rand -base64 32`), VAPID keys (จาก `npx web-push generate-vapid-keys`)
 5. Deploy เสร็จ → แก้ `NEXT_PUBLIC_APP_URL` เป็น URL จริง → **Manual Deploy** อีกครั้ง (NEXT_PUBLIC ต้อง rebuild)
 
 > ⚠️ ข้อผิดพลาดที่พบบ่อยบน Render
 >
 > **P1012: Environment variable not found: DATABASE_URL** — service ยังไม่มี env var นี้
-> ไปที่ Service → **Environment** → เพิ่ม `DATABASE_URL` (คัดลอกจากหน้า Postgres → Internal Database URL) แล้ว redeploy
+> ไปที่ Service → **Environment** → เพิ่ม `DATABASE_URL` (เช่น `file:/app/data/stock-alert.db`) แล้ว redeploy
 >
 > **P3009: migrate found failed migrations** — เคยมี migration รันแล้วล้มค้างอยู่ใน DB
 > ทำให้ migration ใหม่ไม่ถูก apply แก้ได้ 2 ทาง:
 >
 > **ทาง 1 (DB ยังไม่มีข้อมูลจริง — แนะนำ): ให้ deploy ซ่อมตัวเอง** — start command ของ image ใช้ `scripts/safe-migrate.mjs`
-> ที่จับ P3009 แล้ว reset schema + apply migration ใหม่ให้เองเมื่อเปิด flag:
+> ที่จับ P3009 แล้ว ลบไฟล์ SQLite + apply migration ใหม่ให้เองเมื่อเปิด flag:
 > ```text
 > Render → Service → Environment → เพิ่ม:
->   DB_AUTO_RECOVER = true     (ล้าง schema + migrate ใหม่ — DROP ทุกตาราง!)
+>   DB_AUTO_RECOVER = true     (ลบไฟล์ SQLite + migrate ใหม่ — ข้อมูลใน DB หายหมด!)
 >   FRESH_DB_SEED  = true      (seed ข้อมูลเริ่มต้น demo user + assets)
 > แล้วกด Save Changes → redeploy → พอ deploy ผ่านแล้ว "ลบสองตัวแปรนี้ทิ้ง" ทันที
 > ```
 >
 > **ทาง 2: รันจากเครื่องคุณเอง** (เมื่อไม่อยาก redeploy):
 > ```bash
-> DATABASE_URL="<Internal Database URL ของ Render>" sh scripts/reset-migrations.sh
+> DATABASE_URL="file:./dev.db" sh scripts/reset-migrations.sh
 > ```
 >
 > **ทาง 3 (DB มีข้อมูลจริงแล้ว — ห้าม reset):** mark migration ที่ fail แล้ว deploy ใหม่:
@@ -167,23 +168,33 @@ docker compose up -d --build
 > ถ้า log แสดงชื่อ database เพี้ยน เช่น `database "msc_stock%20sh%20scripts/reset-migrations.sh"`
 > แปลว่ามีคนวาง `DATABASE_URL="..." sh scripts/reset-migrations.sh` ทั้งบรรทัดลงช่อง Environment Variable
 > บน Render — **ช่อง DATABASE_URL ให้ใส่แค่ URL เท่านั้น** เช่น
-> `postgresql://user:pass@host/db` (ตัด `"` และคำสั่งอื่นออกทั้งหมด)
+> `file:/app/data/stock-alert.db` (ตัด `"` และคำสั่งอื่นออกทั้งหมด)
+>
+> **Deploy ค้างนาน ~15 นาที แล้วจบด้วย "Port scan timeout reached, no open ports detected"**
+> build ผ่านแต่ `safe-migrate: prisma migrate deploy` เงียบไปตลอด = migrate เชื่อมต่อ DB ไม่ได้และค้าง
+> จนหมดเวลา port scan (server ไม่เคยได้สตาร์ท) สาเหตุที่พบบ่อย:
+>
+> 1. **โฟลเดอร์ของไฟล์ SQLite เขียนไม่ได้** — /app/data ต้องเขียนได้โดย user "app" ใน container (ตรวจ mount/disk)
+> 2. **DATABASE_URL ผิดรูปแบบ** — ต้องขึ้นด้วย `file:` เช่น `file:/app/data/stock-alert.db`
+> 3. **P3009 migration ค้าง** — ตั้ง `DB_AUTO_RECOVER=true` (ลบไฟล์ DB — ข้อมูลหาย!) แล้ว redeploy
+>
+> สคริปต์ deploy มี preflight + timeout ฝังไว้แล้ว: ถ้าไฟล์ DB เขียนไม่ได้ จะ fail ทันทีพร้อมข้อความบอกสาเหตุ
+> แทนที่จะแขวนนิ่ง 15 นาที (ปรับเวลาได้: `MIGRATE_TIMEOUT_SECONDS`, `SEED_TIMEOUT_SECONDS`)
 
 **วิธีที่ 2: Manual (Docker runtime)**
 
-1. New → **PostgreSQL** → สร้าง DB แล้วคัดลอก **Internal Database URL**
-2. New → **Web Service** → เชื่อม repo → Runtime: **Docker**
-3. ก่อนกด Create: เพิ่ม Environment Variables ให้ครบตามตารางข้างบน (`DATABASE_URL` ใส่ Internal URL ที่คัดลอกไว้)
-4. Web Service อีกตัว (หรือ Background Worker) สำหรับ worker:
-   - Docker Command: `npx tsx worker/index.ts`
-   - Env เดียวกัน (`DATABASE_URL`, `MARKET_DATA_PROVIDER`, `POLLING_INTERVAL_SECONDS`)
+1. New → **Web Service** → เชื่อม repo → Runtime: **Docker** — Blueprint นี้ไม่ต้องสร้าง Postgres แล้ว
+2. ก่อนกด Create: เพิ่ม Environment Variables ให้ครบ (`DATABASE_URL` = `file:/app/data/stock-alert.db`)
+3. ⚠️ **SQLite อยู่ใน filesystem ของ container — ข้อมูลจะหายทุกครั้งที่ deploy บนแผน free**
+   (ต้องการ persist จริง: อัปเกรดเป็น paid plan แล้วเพิ่ม Render Disk mount ที่ `/app/data`)
+4. worker รวมอยู่ใน container เดียวกันแล้วผ่าน `RUN_WORKER_IN_WEB=true` (SQLite แชร์ไฟล์ข้าม container ไม่ได้)
 
 ### Vercel
 
 1. Import repo → ตั้ง env ทั้งหมดจาก .env.example (+CRON_SECRET)
 2. `NEXT_PUBLIC_APP_URL=https://yourdomain.com`
 3. เพิ่ม Vercel Cron ชี้ที่ /api/cron/run-poll (ดู vercel.json)
-4. ใช้ Postgres ภายนอก (Neon/Supabase) — อย่ารัน worker บน Vercel
+4. ใช้ SQLite ร่วมกับ cron ได้ แต่ไฟล์ DB บน serverless อาจถูกรีเซ็ต — ถ้าต้องการ persist จริงให้ mount volume/แยก host ที่เก็บไฟล์ (อย่ารัน worker long-running บน Vercel)
 
 ### Railway / Render / Fly.io / VPS
 

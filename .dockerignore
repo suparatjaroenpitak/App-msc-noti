@@ -3,6 +3,6 @@ node_modules
 .git
 .env
 .env.local
-data/sounds
+data
 playwright-report
 test-results

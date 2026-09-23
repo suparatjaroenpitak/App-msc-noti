@@ -20,7 +20,7 @@
 
 1. **Next.js App (SSR/CSR + REST API)** — UI, Auth, CRUD
 2. **Background Worker** — ดึงราคา ตรวจเงื่อนไข ยิง Push (deploy แยกได้)
-3. **PostgreSQL + Prisma** — Source of truth
+3. **SQLite + Prisma** — Source of truth (ไฟล์เดียว ไม่ต้องมี DB server)
 4. **Market Data Providers** — Twelve Data / Alpha Vantage / Finnhub / Mock (dev only) ซ่อนหลัง Interface เดียว
 
 ## 2. Functional Requirements
@@ -69,7 +69,7 @@
 └─────────────────────┘                                     │ Prisma
                                                             ▼
                                               ┌──────────────────────────┐
-                                              │       PostgreSQL         │
+                                              │       SQLite (file)      │
                                               │ Users, Assets, Watchlist │
                                               │ AlertRules, AlertEvents  │
                                               │ PushSubs, Sounds, Logs   │

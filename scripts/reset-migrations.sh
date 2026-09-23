@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # แก้ปัญหา P3009 (failed migrations) / เริ่ม migration history ใหม่บน database ที่ยังไม่มีข้อมูลจริง
 #
-# ใช้: DATABASE_URL="postgresql://..." sh scripts/reset-migrations.sh
+# ใช้: DATABASE_URL="file:./data/stock-alert.db" sh scripts/reset-migrations.sh
 #
 # ⚠️ สคริปต์นี้ DROP ทุกตารางใน schema public ของ DATABASE_URL — ใช้เฉพาะ:
 #   1) ฐานข้อมูลเปล่า/ใหม่ หรือ
@@ -11,7 +11,7 @@
 set -e
 
 if [ -z "$DATABASE_URL" ]; then
-  echo "❌ ต้องตั้ง DATABASE_URL ก่อน (DATABASE_URL=\"postgresql://...\" sh scripts/reset-migrations.sh)"
+  echo "❌ ต้องตั้ง DATABASE_URL ก่อน (DATABASE_URL=\"file:./data/stock-alert.db\" sh scripts/reset-migrations.sh)"
   exit 1
 fi
 
@@ -19,7 +19,7 @@ echo "==> Reset migration history และตารางทั้งหมด�
 echo "    (ยกเลิกภายใน 5 วินาที — Ctrl+C)"
 sleep 5
 
-npx prisma db execute --stdin <<'SQL'
+npx prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
 DROP SCHEMA IF EXISTS "public" CASCADE;
 CREATE SCHEMA "public";
 GRANT ALL ON SCHEMA "public" TO CURRENT_USER;

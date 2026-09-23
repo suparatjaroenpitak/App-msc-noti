@@ -1,51 +1,23 @@
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: stock_alert
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   app:
     build: .
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://postgres:password@db:5432/stock_alert
+      # SQLite — เก็บไฟล์ใน /app/data แล้ว mount volume เพื่อ persist
+      DATABASE_URL: file:/app/data/stock-alert.db
       AUTH_SECRET: change-this-secret
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       MARKET_DATA_PROVIDER: mock
       POLLING_INTERVAL_SECONDS: "60"
+      # worker รันใน container เดียวกับ app (SQLite แชร์ไฟล์ข้าม container ไม่ได้)
+      RUN_WORKER_IN_WEB: "true"
       VAPID_PUBLIC_KEY: ""
       VAPID_PRIVATE_KEY: ""
       VAPID_SUBJECT: mailto:admin@example.com
     ports:
       - "3000:3000"
-    command: sh -c "npx prisma migrate deploy && npx tsx prisma/seed.ts && npm run start"
-
-  worker:
-    build: .
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://postgres:password@db:5432/stock_alert
-      POLLING_INTERVAL_SECONDS: "60"
-      MARKET_DATA_PROVIDER: mock
-    command: sh -c "npx tsx worker/index.ts"
+    volumes:
+      - appdata:/app/data
 
 volumes:
-  pgdata:
+  appdata:

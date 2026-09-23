@@ -14,18 +14,32 @@ export async function GET(req: Request) {
     if (!q) return ok({ results: [] });
 
     const upper = q.toUpperCase();
+    // SQLite: `contains` เป็น case-sensitive และไม่รองรับ mode: "insensitive" —
+    // ครอบคลุมด้วยตัวแปรพบบ่อย (ต้นฉบับ / ขึ้นต้นด้วยตัวพิมพ์ใหญ่ / ตัวพิมพ์ใหญ่ทั้งคำ)
+    const cap = q.charAt(0).toUpperCase() + q.slice(1);
     let results: AssetSearchResult[] = [];
 
     // 1) Local DB first (seeded + previously discovered assets).
     const local = await prisma.asset.findMany({
       where: {
-        OR: [{ symbol: { contains: upper } }, { name: { contains: q, mode: "insensitive" } }],
+        OR: [
+          { symbol: { contains: upper } },
+          { name: { contains: q } },
+          { name: { contains: cap } },
+          { name: { contains: upper } },
+        ],
       },
       take: 15,
       orderBy: { symbol: "asc" },
     });
     if (local.length > 0) {
-      results = local.map((a) => ({ symbol: a.symbol, name: a.name, exchange: a.exchange, type: a.type, currency: a.currency }));
+      results = local.map((a) => ({
+        symbol: a.symbol,
+        name: a.name,
+        exchange: a.exchange,
+        type: a.type as AssetSearchResult["type"],
+        currency: a.currency,
+      }));
     }
 
     // 2) Provider fallback (merge, dedupe by symbol), tolerate provider failure.

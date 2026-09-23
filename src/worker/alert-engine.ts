@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { pollActiveSymbols } from "./market-poller";
 import { sendAlertNotification } from "@/lib/notifications/send";
-import type { AlertCondition } from "@prisma/client";
+import type { AlertCondition, AlertType } from "@/types/enums";
 
 export interface PollCycleResult {
   symbolsPolled: number;
@@ -49,9 +49,9 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
     const quote = quotes.get(rule.asset.symbol);
     if (!quote) continue;
     const price = quote.price;
-    const target = rule.targetPrice.toNumber();
+    const target = rule.targetPrice;
 
-    if (!conditionMet(rule.condition, price, target)) continue;
+    if (!conditionMet(rule.condition as AlertCondition, price, target)) continue;
 
     // Cooldown check (cheap pre-filter; the conditional update below is the real lock).
     if (rule.lastTriggeredAt && now - rule.lastTriggeredAt.getTime() < rule.cooldownMinutes * 60_000) continue;
@@ -109,12 +109,12 @@ export async function runPollCycle(options?: { force?: boolean }): Promise<PollC
         userId: rule.userId,
         alertRuleId: rule.id,
         alertEventId: alertEvent.id,
-        alertType: rule.type,
+        alertType: rule.type as AlertType,
         symbol: rule.asset.symbol,
         assetName: rule.asset.name,
         currentPrice: price,
         targetPrice: target,
-        condition: rule.condition,
+        condition: rule.condition as AlertCondition,
         customMessage: rule.notificationMessage
           ? `${rule.notificationMessage}${aiSummary ? `\n📊 ${aiSummary}` : ""}`
           : aiSummary

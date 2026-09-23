@@ -37,7 +37,7 @@ const quote = (price: number): StockQuote => ({
 
 const baseRule = {
   id: "rule1", userId: "u1", assetId: "a1", name: "test", type: "ENTRY",
-  condition: "BELOW_OR_EQUAL", targetPrice: { toNumber: () => 180 },
+  condition: "BELOW_OR_EQUAL", targetPrice: 180,
   enabled: true, oneTime: false, cooldownMinutes: 60, notificationMessage: null,
   soundId: null, lastTriggeredAt: null,
   asset: { id: "a1", symbol: "QQQM", name: "Invesco NASDAQ 100 ETF", currency: "USD" },
@@ -74,14 +74,14 @@ describe("alert engine", () => {
 
   it("triggers ABOVE_OR_EQUAL when price >= target", async () => {
     setMarketDataProviderForTests({ getQuote: async () => quote(151), searchAssets: async () => [] });
-    await setupRules([{ ...baseRule, condition: "ABOVE_OR_EQUAL", targetPrice: { toNumber: () => 150 } }]);
+    await setupRules([{ ...baseRule, condition: "ABOVE_OR_EQUAL", targetPrice: 150 }]);
     const result = await runPollCycle({ force: true });
     expect(result.alertsTriggered).toBe(1);
   });
 
   it("does NOT trigger ABOVE_OR_EQUAL when price < target", async () => {
     setMarketDataProviderForTests({ getQuote: async () => quote(149), searchAssets: async () => [] });
-    await setupRules([{ ...baseRule, condition: "ABOVE_OR_EQUAL", targetPrice: { toNumber: () => 150 } }]);
+    await setupRules([{ ...baseRule, condition: "ABOVE_OR_EQUAL", targetPrice: 150 }]);
     const result = await runPollCycle({ force: true });
     expect(result.alertsTriggered).toBe(0);
   });

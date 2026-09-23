@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import type { AssetType } from "@/types/enums";
 import { analyze, DISCLAIMER } from "./engine";
 import type { EngineInput, EngineOutput } from "./engine";
 
@@ -33,7 +34,7 @@ async function fetchRecentPrices(assetId: string, lookbackMinutes: number): Prom
     orderBy: { sampledAt: "asc" },
     select: { price: true },
   });
-  return rows.map((r) => r.price.toNumber());
+  return rows.map((r) => r.price);
 }
 
 export interface SuggestInput {
@@ -64,7 +65,7 @@ export async function suggestEntryPrice(input: SuggestInput): Promise<
     const engineInput: EngineInput = {
       symbol: input.symbol,
       assetName: asset.name,
-      assetType: asset.type,
+      assetType: asset.type as AssetType,
       currentPrice: input.currentPrice,
       currency: "USD",
       recentPrices,
@@ -136,7 +137,7 @@ export async function analyzeTrigger(
     const result = analyze({
       symbol: asset.symbol,
       assetName: asset.name,
-      assetType: asset.type,
+      assetType: asset.type as AssetType,
       currentPrice: input.currentPrice,
       currency: "USD",
       recentPrices,
