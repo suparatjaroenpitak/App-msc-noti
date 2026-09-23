@@ -23,6 +23,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn().mockResolvedValue([{ id: "sub1", endpoint: "https://push.example/1", p256dh: "k", auth: "a" }]),
     },
     notificationSound: { findUnique: vi.fn() },
+    aiSettings: { findUnique: vi.fn().mockResolvedValue(null) },
     notificationLog: { create: vi.fn().mockResolvedValue({}) },
   },
 }));

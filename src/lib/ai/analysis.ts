@@ -67,7 +67,7 @@ Cooldown ที่ระบบรองรับ: ทุก ${input.cooldownMinu
 }
 
 /** Parse the model's JSON reply leniently (models sometimes wrap or pad). */
-function parseSuggestion(raw: string): Omit<SuggestPriceResult, "model" | "durationMs"> {
+export function parseSuggestion(raw: string): Omit<SuggestPriceResult, "model" | "durationMs"> {
   let obj: Record<string, unknown>;
   try {
     obj = JSON.parse(raw) as Record<string, unknown>;
