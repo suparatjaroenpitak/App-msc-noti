@@ -6,3 +6,5 @@ node_modules
 data
 playwright-report
 test-results
+# React Native app — not part of the server image
+mobile

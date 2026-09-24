@@ -7,7 +7,7 @@ import { clientIp, rateLimit, sweepRateLimits } from "@/lib/security/rate-limit"
 
 export async function requireUser(req: Request): Promise<{ id: string; email: string; name: string; image: string | null }> {
   const user = await getSessionUser(req);
-  if (!user) throw unauthorized();
+  if (!user) throw new HttpError(401, "UNAUTHORIZED", "Authentication required");
   return user;
 }
 

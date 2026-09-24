@@ -30,6 +30,26 @@ worker/             # standalone worker entrypoint (npm run worker)
 prisma/             # schema + seed
 public/             # sw.js, manifest, icons, sounds, offline.html
 tests/              # unit (vitest) + e2e (playwright)
+mobile/             # แอป Android (React Native/Expo) — ดู mobile/README.md
+```
+
+## แอป Android (React Native)
+
+มีแอปมือถือสำหรับ Android ในโฟลเดอร์ `mobile/` (Expo + TypeScript) ใช้ API ชุดเดียวกับเว็บ
+โดยยืนยันตัวตนผ่าน Bearer token:
+
+- `POST /api/auth/token` — แลก email + password เป็น token (ตาราง Session เดียวกับ cookie login)
+- ทุก endpoint ของเว็บรองรับ `Authorization: Bearer <token>` แล้ว
+- ฟีเจอร์: Login, Dashboard, Watchlist, Alerts (เปิด/ปิด/ทดสอบ/สร้าง/แก้ไข/ลบ), เสียงแจ้งเตือน, ตั้งค่า
+- ยังไม่รวม native push (FCM) — ดู `mobile/README.md`
+
+Build APK (คลาวด์ ไม่ต้องติดตั้ง Android SDK):
+
+```bash
+cd mobile
+npx eas-cli login
+npx eas-cli init
+npx eas-cli build --platform android --profile preview   # ได้ไฟล์ .apk
 ```
 
 ## เริ่มต้น (Development)

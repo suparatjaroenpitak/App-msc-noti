@@ -31,6 +31,20 @@ export async function createSession(userId: string, userAgent?: string | null): 
 
 /** Resolve the current user from the session cookie. Returns null when absent/expired. */
 export async function getSessionUser(req: NextRequest | Request): Promise<{ id: string; email: string; name: string; image: string | null } | null> {
+  // Native app (React Native) support: `Authorization: Bearer <token>`.
+  // The same token hashes into Session.tokenHash, so both flows share one table.
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.toLowerCase().startsWith("bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (!token) return null;
+    const session = await prisma.session.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: { user: true },
+    });
+    if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+    return { id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image };
+  }
+
   const rawCookie = req.headers.get("cookie");
   if (!rawCookie) return null;
   const match = rawCookie
@@ -50,8 +64,15 @@ export async function getSessionUser(req: NextRequest | Request): Promise<{ id: 
   return { id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image };
 }
 
-/** Delete the current session (logout). */
+/** Delete the current session (logout) — cookie or bearer token. */
 export async function destroySession(req: NextRequest | Request): Promise<void> {
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.toLowerCase().startsWith("bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } });
+    return;
+  }
+
   const rawCookie = req.headers.get("cookie");
   if (!rawCookie) return;
   const match = rawCookie
