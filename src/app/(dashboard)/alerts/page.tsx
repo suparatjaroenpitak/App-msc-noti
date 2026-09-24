@@ -44,9 +44,20 @@ export default function AlertsPage() {
 
   const act = async (id: string, action: "enable" | "disable" | "duplicate" | "test") => {
     try {
-      await apiFetch(`/api/alerts/${id}/actions`, { method: "POST", body: JSON.stringify({ action }) });
+      const r = await apiFetch<{ test?: boolean; sent?: number; failed?: number; reason?: string }>(
+        `/api/alerts/${id}/actions`,
+        { method: "POST", body: JSON.stringify({ action }) },
+      );
       if (action === "duplicate") toast.push("success", "คัดลอก Alert แล้ว (เริ่มต้นเป็นสถานะปิด)");
-      if (action === "test") toast.push("info", "ส่ง notification ทดสอบแล้ว — ตรวจสอบอุปกรณ์ของคุณ");
+      if (action === "test") {
+        if (r.reason) {
+          toast.push("error", `ยังไม่ได้ส่ง: ${r.reason}`);
+        } else if ((r.sent ?? 0) > 0) {
+          toast.push("success", `ส่ง notification ทดสอบแล้ว ${r.sent} เครื่อง${r.failed ? ` (ล้มเหลว ${r.failed})` : ""}`);
+        } else {
+          toast.push("error", "ส่งไม่สำเร็จทุกเครื่อง — ดูสาเหตุใน Delivery Logs (หน้า Notifications)");
+        }
+      }
       await load();
     } catch (e) {
       toast.push("error", e instanceof ApiClientError ? e.message : "ทำรายการไม่สำเร็จ");

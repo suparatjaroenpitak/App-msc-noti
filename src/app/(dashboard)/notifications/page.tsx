@@ -52,7 +52,16 @@ export default function NotificationsPage() {
     setTesting(true);
     try {
       const r = await push.sendTest();
-      toast.push("success", `ส่งแล้ว ${r.sent} เครื่อง${r.failed > 0 ? ` (ล้มเหลว ${r.failed})` : ""}`);
+      if (r.reason) {
+        // Nothing was attempted — tell the user WHY instead of a fake success.
+        toast.push("error", `ยังไม่ได้ส่ง: ${r.reason}`);
+      } else if (r.sent > 0 && r.failed === 0) {
+        toast.push("success", `ส่งแล้ว ${r.sent} เครื่อง`);
+      } else if (r.sent > 0) {
+        toast.push("info", `ส่งสำเร็จ ${r.sent} เครื่อง · ล้มเหลว ${r.failed} เครื่อง (ดูรายละเอียดใน Delivery Logs)`);
+      } else {
+        toast.push("error", "ส่งไม่สำเร็จทุกเครื่อง — ดูสาเหตุในแท็บ Delivery Logs");
+      }
       await load();
     } catch (e) {
       toast.push("error", e instanceof ApiClientError ? e.message : "ส่งไม่สำเร็จ");
@@ -62,8 +71,14 @@ export default function NotificationsPage() {
   };
 
   const togglePush = async (v: boolean) => {
-    const r = v ? await push.enable() : await push.disable();
-    toast.push(r.ok ? "success" : "error", r.message);
+    try {
+      const r = v ? await push.enable() : await push.disable();
+      toast.push(r.ok ? "success" : "error", r.message);
+    } catch (e) {
+      // Surface the real error — previously this failed silently on mobile.
+      toast.push("error", e instanceof ApiClientError ? e.message : "เปิด/ปิด push ไม่สำเร็จ — ลองใหม่อีกครั้ง");
+      await push.refresh();
+    }
   };
 
   return (
@@ -81,7 +96,7 @@ export default function NotificationsPage() {
           <Badge tone={push.permission === "granted" ? "green" : push.permission === "denied" ? "red" : "amber"}>
             permission: {push.permission}
           </Badge>
-          <Button size="sm" variant="secondary" onClick={sendTest} disabled={testing || !push.subscribed}>
+          <Button size="sm" variant="secondary" onClick={sendTest} disabled={testing}>
             <Send className="h-3.5 w-3.5" /> {testing ? "กำลังส่ง…" : "ส่งข้อความทดสอบ"}
           </Button>
         </CardBody>

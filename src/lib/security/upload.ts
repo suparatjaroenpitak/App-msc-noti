@@ -52,7 +52,11 @@ export async function validateSoundUpload(file: File): Promise<ValidatedSoundFil
     throw badRequest("Unsupported file type. Allowed: mp3, wav, ogg, m4a");
   }
   const allowedMimes = MIME_BY_EXT[ext]!;
-  if (file.type && !allowedMimes.includes(file.type)) {
+  // Mobile OS pickers (iOS/Android) often report generic MIME types like
+  // "application/octet-stream" or an empty string. Magic-byte sniffing below is
+  // the real gate, so only reject when the browser reports a *specific* wrong type.
+  const GENERIC_MIMES = new Set(["", "application/octet-stream", "application/binary", "application/download"]);
+  if (file.type && !GENERIC_MIMES.has(file.type) && !allowedMimes.includes(file.type)) {
     throw badRequest(`MIME type "${file.type}" does not match extension .${ext}`);
   }
   if (file.size <= 0) throw badRequest("Empty file");

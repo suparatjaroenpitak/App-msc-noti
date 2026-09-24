@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useToast } from "@/components/ui/toast";
-import { playNotificationSound } from "@/hooks/use-sound";
+import { playNotificationSound, primeAudioOnUserGesture } from "@/hooks/use-sound";
 
 type PushData = {
   title?: string;
@@ -15,6 +15,8 @@ type PushData = {
 /**
  * Registers /sw.js and:
  *  - listens for the SW push event mirrored to pages via postMessage,
+ *  - primes the audio element on first user gesture (browsers only allow audio
+ *    playback after interaction — without this, foreground custom sounds fail),
  *  - plays the custom sound while the app is in the FOREGROUND,
  *  - surfaces a toast as a backup for browsers that suppress the native notification.
  * Background delivery is handled entirely by the SW (system sound — see Sounds page notice).
@@ -24,6 +26,17 @@ export function PushProvider() {
 
   useEffect(() => {
     let cancelled = false;
+    let primed = false;
+
+    const prime = () => {
+      if (primed) return;
+      primed = true;
+      primeAudioOnUserGesture();
+    };
+    // First tap/click/keypress anywhere unlocks audio for later playback.
+    window.addEventListener("pointerdown", prime, { once: true, passive: true });
+    window.addEventListener("keydown", prime, { once: true, passive: true });
+    window.addEventListener("touchstart", prime, { once: true, passive: true });
 
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === "PUSH_RECEIVED") {
@@ -51,6 +64,9 @@ export function PushProvider() {
 
     return () => {
       cancelled = true;
+      window.removeEventListener("pointerdown", prime);
+      window.removeEventListener("keydown", prime);
+      window.removeEventListener("touchstart", prime);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [toast]);

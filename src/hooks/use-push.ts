@@ -65,16 +65,33 @@ export function usePush() {
     if (permission !== "granted") {
       return { ok: false, message: "ยังไม่ได้รับอนุญาตแสดงการแจ้งเตือน" };
     }
-    const reg = await navigator.serviceWorker.register("/sw.js");
-    await navigator.serviceWorker.ready;
+    let reg: ServiceWorkerRegistration;
+    try {
+      reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+    } catch {
+      return { ok: false, message: "ลงทะเบียน Service Worker ไม่สำเร็จ — ลองปิดแล้วเปิดแอปใหม่" };
+    }
 
     const { vapidPublicKey } = await apiFetch<{ vapidPublicKey: string | null }>("/api/push/status");
-    if (!vapidPublicKey) return { ok: false, message: "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า VAPID keys" };
+    if (!vapidPublicKey) return { ok: false, message: "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า VAPID keys — แจ้งผู้ดูแลระบบ (ต้องตั้ง VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY บน Render)" };
 
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource,
-    });
+    let sub: PushSubscription;
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource,
+      });
+    } catch (e) {
+      const name = e instanceof Error ? e.name : "";
+      if (name === "NotAllowedError") {
+        return { ok: false, message: "เบราว์เซอร์บล็อกการแจ้งเตือน — เคยปฏิเสธสิทธิ์ไว้ ต้องไปเปิดใหม่ใน การตั้งค่าเว็บไซต์ ของเบราว์เซอร์" };
+      }
+      if (e instanceof TypeError) {
+        return { ok: false, message: "Push ต้องเปิดผ่าน HTTPS เท่านั้น (ใช้ลิงก์ https:// ของ Render ไม่ใช่ http)" };
+      }
+      return { ok: false, message: "สมัครรับการแจ้งเตือนไม่สำเร็จ — ลองใหม่อีกครั้ง" };
+    }
     const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
       return { ok: false, message: "Subscription ไม่สมบูรณ์" };
@@ -93,19 +110,24 @@ export function usePush() {
   }, [refresh]);
 
   const disable = useCallback(async (): Promise<{ ok: boolean; message: string }> => {
-    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
-    const sub = reg ? await reg.pushManager.getSubscription() : null;
-    if (sub) {
-      const endpoint = sub.endpoint;
-      await sub.unsubscribe().catch(() => undefined);
-      await apiFetch("/api/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) });
+    try {
+      const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+      const sub = reg ? await reg.pushManager.getSubscription() : null;
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe().catch(() => undefined);
+        await apiFetch("/api/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }).catch(() => undefined);
+      }
+      await refresh();
+      return { ok: true, message: "ปิดการแจ้งเตือนอุปกรณ์นี้แล้ว" };
+    } catch {
+      await refresh().catch(() => undefined);
+      return { ok: false, message: "ปิดการแจ้งเตือนไม่สำเร็จ — ลองใหม่อีกครั้ง" };
     }
-    await refresh();
-    return { ok: true, message: "ปิดการแจ้งเตือนอุปกรณ์นี้แล้ว" };
   }, [refresh]);
 
   const sendTest = useCallback(async () => {
-    return apiFetch<{ sent: number; failed: number }>("/api/push/test", {
+    return apiFetch<{ sent: number; failed: number; reason?: string }>("/api/push/test", {
       method: "POST",
       body: JSON.stringify({}),
     });

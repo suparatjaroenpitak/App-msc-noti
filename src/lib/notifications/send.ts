@@ -35,15 +35,18 @@ export function buildAlertNotification(input: SendAlertNotificationInput): { tit
  * preferences (push/entry/exit/custom) and the per-type/default sound.
  * Writes one NotificationLog per subscription attempt.
  */
-export async function sendAlertNotification(input: SendAlertNotificationInput): Promise<{ sent: number; failed: number }> {
+export async function sendAlertNotification(
+  input: SendAlertNotificationInput,
+): Promise<{ sent: number; failed: number; reason?: string }> {
   const prefs = await prisma.notificationPreference.findUnique({ where: { userId: input.userId } });
-  if (!prefs || !prefs.pushEnabled) return { sent: 0, failed: 0 };
+  if (!prefs) return { sent: 0, failed: 0, reason: "ยังไม่มีการตั้งค่าการแจ้งเตือนสำหรับบัญชีนี้" };
+  if (!prefs.pushEnabled) return { sent: 0, failed: 0, reason: 'ปิด "เปิดใช้ Push ทั้งหมด" อยู่ — เปิดในหน้า ตั้งค่าการแจ้งเตือน' };
 
   const typeEnabled =
     (input.alertType === "ENTRY" && prefs.entryEnabled) ||
     (input.alertType === "EXIT" && prefs.exitEnabled) ||
     (input.alertType === "CUSTOM" && prefs.customEnabled);
-  if (!typeEnabled) return { sent: 0, failed: 0 };
+  if (!typeEnabled) return { sent: 0, failed: 0, reason: `การแจ้งเตือนประเภท ${input.alertType} ถูกปิดอยู่ใน ตั้งค่าการแจ้งเตือน` };
 
   // Resolve sound: alert-specific → preference default → null (system sound fallback)
   const rule = await prisma.alertRule.findUnique({ where: { id: input.alertRuleId }, select: { soundId: true } });
@@ -56,6 +59,9 @@ export async function sendAlertNotification(input: SendAlertNotificationInput): 
 
   const { title, body } = buildAlertNotification(input);
   const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: input.userId } });
+  if (subscriptions.length === 0) {
+    return { sent: 0, failed: 0, reason: "ไม่มีอุปกรณ์ที่สมัคร push — เปิดสวิตช์ Push บนอุปกรณ์ที่ต้องการรับแจ้งเตือน" };
+  }
 
   let sent = 0;
   let failed = 0;
@@ -103,14 +109,27 @@ export async function sendAlertNotification(input: SendAlertNotificationInput): 
   return { sent, failed };
 }
 
-/** Send an ad-hoc test notification (no AlertEvent). */
-export async function sendTestNotification(userId: string, deviceName?: string): Promise<{ sent: number; failed: number }> {
+/**
+ * Send an ad-hoc test notification (no AlertEvent).
+ * Returns a human-readable `reason` when nothing was attempted, so the UI can
+ * tell the user WHY no device received anything (instead of a silent no-op).
+ */
+export async function sendTestNotification(userId: string, deviceName?: string): Promise<{ sent: number; failed: number; reason?: string }> {
   const prefs = await prisma.notificationPreference.findUnique({ where: { userId } });
+  if (!prefs) {
+    return { sent: 0, failed: 0, reason: "ยังไม่มีการตั้งค่าการแจ้งเตือนสำหรับบัญชีนี้" };
+  }
+  if (!prefs.pushEnabled) {
+    return { sent: 0, failed: 0, reason: 'ปิด "เปิดใช้ Push ทั้งหมด" อยู่ — เปิดในหน้า ตั้งค่าการแจ้งเตือน' };
+  }
   const { title, body } = {
     title: "Stock Alert — Test 🔔",
     body: `นี่คือ notification ทดสอบ${deviceName ? ` สำหรับ ${deviceName}` : ""} — ระบบพร้อมใช้งาน`,
   };
   const subscriptions = await prisma.pushSubscription.findMany({ where: { userId } });
+  if (subscriptions.length === 0) {
+    return { sent: 0, failed: 0, reason: "ไม่มีอุปกรณ์ที่สมัคร push — เปิดสวิตช์ Push บนอุปกรณ์ที่ต้องการรับแจ้งเตือน" };
+  }
   let sent = 0;
   let failed = 0;
   const deadSubscriptionIds: string[] = [];

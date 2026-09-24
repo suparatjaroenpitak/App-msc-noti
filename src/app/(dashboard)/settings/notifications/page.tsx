@@ -58,8 +58,13 @@ export default function NotificationSettingsPage() {
   };
 
   const togglePush = async (v: boolean) => {
-    const r = v ? await push.enable() : await push.disable();
-    toast.push(r.ok ? "success" : "error", r.message);
+    try {
+      const r = v ? await push.enable() : await push.disable();
+      toast.push(r.ok ? "success" : "error", r.message);
+    } catch (e) {
+      toast.push("error", e instanceof ApiClientError ? e.message : "เปิด/ปิด push ไม่สำเร็จ — ลองใหม่อีกครั้ง");
+      await push.refresh();
+    }
   };
 
   return (
