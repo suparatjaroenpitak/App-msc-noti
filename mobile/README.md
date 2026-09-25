@@ -1,117 +1,82 @@
-# Stock Alert — Android App (React Native / Expo)
+# Stock Alert Mobile (Android)
 
-แอปมือถือ Android ที่คุยกับ API ชุดเดียวกับเว็บ PWA (Next.js บน Render)
-เขียนด้วย **Expo SDK 57 / React Native 0.86 / TypeScript strict**
+แอปมือถือ Android สำหรับ Stock Alert (React Native 0.86 + Expo SDK 57, TypeScript)
 
-## ฟีเจอร์ (v1)
+## APK ที่ build แล้ว
 
-| หน้า | รายละเอียด |
-| --- | --- |
-| Login | กรอก server URL (Render) + อีเมล/รหัสผ่าน → เก็บ token ไว้ในเครื่อง |
-| ภาพรวม (Dashboard) | จำนวน watchlist / active alerts, สถานะตลาดสหรัฐฯ, ราคาล่าสุด, เหตุการณ์แจ้งเตือนล่าสุด, สถานะระบบ |
-| Watchlist | ค้นหา symbol, เพิ่ม, ลบ, จัดลำดับขึ้น/ลง |
-| Alerts | เปิด/ปิด Alert, ทดสอบส่ง notification (แจ้งผล sent/failed/สาเหตุ), ลบ |
-| Alert Form | สร้าง/แก้ไข Alert (type, เงื่อนไข, ราคาเป้าหมาย, cooldown, one-time, ข้อความ, เสียง) |
-| เสียงแจ้งเตือน | ดูรายการเสียง, เล่นตัวอย่าง, ตั้งเป็นค่าเริ่มต้น, ลบ |
-| ตั้งค่า | เปลี่ยน server URL, preference การแจ้งเตือน, สถานะระบบ, ออกจากระบบ |
+**`apk/StockAlert-release.apk`** (32MB, arm64-v8a, เซ็นด้วย debug key — ติดตั้งได้ทันที)
 
-### ยังไม่รวมในเวอร์ชันนี้
-- **Push notification แบบ native (FCM)** — ต้องตั้งค่า Firebase project + ส่งจากเซิร์ฟเวอร์ผ่าน FCM (เว็บยังใช้ Web Push/VAPID ตามเดิม)
-- อัปโหลดเสียงใหม่จากมือถือ (ทำได้จากเว็บ PWA แล้วเสียงจะ sync มาในแอป)
-- แก้ไขโปรไฟล์/เปลี่ยนรหัสผ่าน, AI suggest price, Analysis settings
+ติดตั้ง: คัดลอกไฟล์ไปเครื่อง Android แล้วเปิดไฟล์ (ต้องเปิดอนุญาต "ติดตั้งจากแหล่งที่ไม่รู้จัก")
 
-## การยืนยันตัวตน
+> หมายเหตุ: เป็น release build ที่เซ็นด้วย debug key — เหมาะกับการใช้งาน/ทดสอบส่วนตัว
+> ถ้าจะเผยแพร่จริง (Play Store / แจกจ่ายสาธารณะ) ต้องสร้าง keystore ของตัวเองแล้วเซ็นด้วย key นั้น
 
-เว็บใช้ session cookie (HttpOnly) ซึ่งแอป native ใช้ไม่สะดวก จึงเพิ่ม endpoint สำหรับออก token:
+## สิ่งที่แอปทำได้
 
-```
-POST /api/auth/token      { email, password }      → { token, expiresAt, user }
-DELETE /api/auth/token    Authorization: Bearer …  → revoke
-```
+- Login ด้วยบัญชีเว็บ (demo@example.com / demo1234 บน instance ที่ seed แล้ว)
+- Dashboard: ดูราคาล่าสุด + สถานะ alert แบบเรียลไทม์
+- Watchlist: เพิ่ม/ลบ/ค้นหาหุ้น
+- Alerts: สร้าง/แก้ไข/ลบการแจ้งเตือน (ทุก type และ condition เหมือนเว็บ)
+- Sounds: ดู/ทดลองเล่นเสียงแจ้งเตือนที่อัปโหลด
+- Settings: เปลี่ยน server URL, ออกจากระบบ
 
-ทุก endpoint เดิมของเว็บรองรับ `Authorization: Bearer <token>` แล้ว (ดู `src/lib/auth/session.ts`)
-โดย token เก็บใน `Session` ตารางเดียวกับ cookie login จึงหมดอายุ 30 วันเท่ากัน
+ปลายทาง API ดีฟอลต์ชี้ไปที่เซิร์ฟเวอร์ที่ตั้งไว้ใน `src/config.ts` (เปลี่ยนได้ในหน้า Settings ของแอป)
 
-## รันในเครื่อง (สำหรับพัฒนา)
+## Build APK ด้วยตัวเอง (เครื่องนี้)
 
-```bash
-cd mobile
-npm install
+เนื่องจากชื่อโฟลเดอร์โปรเจกต์เป็นภาษาไทย (`แอพใช้งาน/แจ้งเตือนหุ้น`) ซึ่งทำให้ NDK/Gradle build ล้มเหลว
+สคริปต์ build จะคัดลอกโค้ดไป build ที่ `C:\acbuild\mobile` (path ภาษาอังกฤษ) แล้วดึง APK กลับมา
 
-# ตั้ง URL เซิร์ฟเวอร์เริ่มต้นที่ src/config.ts (ค่าเริ่มต้นชี้ http://10.0.2.2:3000 = localhost บน Android Emulator)
-npx expo start          # กด a เพื่อเปิด Android Emulator หรือสแกน QR ด้วย Expo Go
-```
+### เตรียมครั้งแรก (ทำแล้วเสร็จบนเครื่องนี้)
 
-> ทดสอบกับมือถือจริงให้ตั้ง server URL เป็น `https://<ชื่อแอป>.onrender.com` ในหน้า Login/Settings
-> (หรือแก้ `DEFAULT_SERVER_URL` ใน `src/config.ts` ก่อน build)
+| ตัวแปร | ค่าที่ใช้ได้ |
+|---|---|
+| JDK 17 | `C:\Users\ssss\AppData\Local\jdk17\jdk-17.0.20.1+1` |
+| Android SDK | `C:\Users\ssss\AppData\Local\Android\Sdk` (build-tools 36 + platform 36 + NDK 27.1.12297006) |
+| Gradle 9.3.1 | อยู่ใน Gradle wrapper cache แล้ว |
+| Local maven | `C:\acbuild\local-maven` (Hermes AAR ที่โหลดเอง — เพราะเน็ตเครื่องนี้โหลดจาก Maven Central ช้า/ติดขัด) |
 
-## Build APK ด้วย EAS Build (คลาวด์ — ไม่ต้องติดตั้ง Android SDK)
+### สั่ง build (ทุกครั้งที่แก้โค้ด `mobile/`)
 
-ครั้งแรกต้องมีบัญชี Expo ฟรี (สมัครที่ https://expo.dev/signup) แล้ว:
+เปิด Git Bash แล้วรัน:
 
 ```bash
-cd mobile
-npx eas-cli login                 # ล็อกอินด้วยบัญชี Expo
-npx eas-cli init                  # ผูกโปรเจกต์นี้กับบัญชี (สร้าง project id ให้)
-npx eas-cli build --platform android --profile preview
+ROOT="/d/แอพใช้งาน/แจ้งเตือนหุ้น/stock-alert/App msc noti"
+SRC="$ROOT/mobile"; DST="/c/acbuild/mobile"
+
+# 1) ซิงก์โค้ดล่าสุดไป build path (ไม่ทับ node_modules / build dir)
+for f in App.tsx index.ts package.json app.json tsconfig.json eas.json babel.config.js; do
+  cp "$SRC/$f" "$DST/$f" 2>/dev/null
+done
+rm -rf "$DST/src"
+cp -r "$SRC/src" "$DST/src"
+
+# 2) ติดตั้ง deps ถ้า package.json เปลี่ยน
+cd "$DST" && [ package.json -nt node_modules ] && npm install
+
+# 3) Build (จำบังคับ locale EN — เครื่องตั้งปฏิทินพุทธศักราชทำ AGP พัง)
+export JAVA_HOME=/c/Users/ssss/AppData/Local/jdk17/jdk-17.0.20.1+1
+cd "$DST/android"
+./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --console=plain --max-workers=2
+
+# 4) ดึง APK กลับ
+cp app/build/outputs/apk/release/app-release.apk "$SRC/apk/StockAlert-release.apk"
 ```
 
-- profile `preview` ตั้งค่า `android.buildType: "apk"` แล้ว → ได้ไฟล์ **.apk** ให้ติดตั้งลงเครื่องโดยตรง
-  (profile `production` จะออกเป็น `.aab` สำหรับอัปโหลด Play Store)
-- Build ใช้เวลาประมาณ 10–20 นาทีบนคลาวด์ ฟรี 30 builds/เดือน (คิวแบบช้า)
-- เมื่อเสร็จ EAS จะให้ URL ให้กดดาวน์โหลด APK (หรือสแกน QR เพื่อติดตั้งลงมือถือ)
-- ติดตั้งบนมือถือต้องอนุญาต "ติดตั้งจากแหล่งที่ไม่รู้จัก" (Unknown sources)
+> อย่าลืม: ถ้า `package.json` เปลี่ยน ให้ `npm install` ที่ `$DST` ก่อน build เสมอ
+> ถ้าโหลด dependency ใหม่ติดขัด ให้เพิ่ม artifact ไว้ใน `C:\acbuild\local-maven` (โครงสร้าง `group/path/version/file`) แล้ว Gradle จะหาจากนั้นก่อนอัตโนมัติ
 
-## Build APK ในเครื่อง (ไม่ใช้บัญชี Expo)
+### ปัญหาที่เคยเจอและวิธีแก้ (บันทึกไว้)
 
-ต้องมี: **JDK 17**, **Android SDK** (platform 36, build-tools 36.0.0, platform-tools, cmake;3.22.1),
-**NDK 27.1.12297006** (~745 MB) — ติดตั้งผ่าน `sdkmanager` ได้
+1. **Path ไทย** → build ต้องอยู่ที่ `C:\acbuild\mobile` เท่านั้น
+2. **ปฏิทินพุทธศักราช (ปี 2569)** → AGP เขียน zip date ไม่ได้ (`VerifyException` ใน `packDate`)
+   แก้แล้วด้วย `-Duser.language=en -Duser.country=US` ใน `gradle.properties`
+3. **Hermes AAR โหลดไม่ได้** → เครื่องนี้เน็ตไป Maven Central ช้ามาก จึงดาวน์โหลดเองด้วย curl แล้ววางใน local maven
+4. **RAM ต่ำ** → ปิด LDPlayer/Chrome ก่อน build ถ้า RAM ว่างน้อยกว่า ~4GB ไม่งั้น Gradle จะหยุดรอ RAM แล้วดูเหมือนค้าง
 
-> ⚠️ **สำคัญ: path ของโปรเจกต์ต้องเป็น ASCII เท่านั้น** — Gradle/CMake/NDK จะพัง (Unable to
-> access jarfile / mojibake) ถ้า path มีอักษรไทยหรืออักขระพิเศษ ให้คัดลอกโฟลเดอร์ `mobile/`
-> ไปไว้ที่ path อังกฤษก่อน build เช่น `C:\acbuild\mobile`
+### TODO ก่อนเผยแพร่จริง
 
-```bash
-# 1) เตรียม env
-export JAVA_HOME="<path jdk17>"
-export ANDROID_HOME="<path Android/Sdk>"
-
-# 2) generate native project + build APK (arm64 รองรับมือถือทุกรุ่นใหม่)
-cd <ascii-path>/mobile
-npx expo prebuild --platform android
-# ตรวจว่า android/local.properties มี sdk.dir ชี้ไปที่ Android SDK
-cd android
-./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
-
-# APK อยู่ที่: android/app/build/outputs/apk/release/app-release.apk
-```
-
-หมายเหตุ
-- APK ที่ได้เซ็นด้วย debug keystore (Expo template ตั้งค่า release ให้ใช้ debug signing) → ติดตั้งได้เลย
-  แต่ไม่ควรใช้ขึ้น Play Store; ถ้าจะเผยแพร่จริงให้สร้าง keystore และตั้ง `signingConfigs.release`
-- อยากรองรับทั้ง 32/64-bit ให้ตัด `-PreactNativeArchitectures=arm64-v8a` ออก (build นานขึ้นมาก)
-- ครั้งแรกใช้เวลานาน (Gradle + Maven dependencies หลายร้อย MB)
-
-## โครงสร้าง
-
-```
-mobile/
-├── App.tsx                     # root: SafeAreaProvider + AuthProvider + Navigator
-├── app.json                    # ชื่อแอป/package com.stockalert.mobile/dark theme
-├── eas.json                    # profile preview = APK
-└── src/
-    ├── api/client.ts           # fetch + Bearer token + server URL (AsyncStorage)
-    ├── api/types.ts            # type ที่ตรงกับ response ของ API ฝั่งเว็บ
-    ├── auth.tsx                # AuthProvider (token/user/login/logout)
-    ├── config.ts               # DEFAULT_SERVER_URL, APP_VERSION
-    ├── hooks/useApi.ts         # GET + loading/error/reload
-    ├── components/ui.tsx       # Screen/Card/Button/Input/Badge ฯลฯ
-    ├── navigation/             # tabs + stack
-    └── screens/                # Login, Dashboard, Watchlist, Alerts, AlertForm, Sounds, Settings
-```
-
-## ข้อจำกัดที่ควรรู้
-
-- เสียง custom เล่นได้เมื่อแอป/เว็บ**เปิดอยู่**เท่านั้น — ตอนเบื้องหลัง OS ใช้เสียงระบบแจ้งเตือน
-- Token เก็บใน AsyncStorage (ไม่ใช่ SecureStore) — เหมาะระดับใช้งานทั่วไป ถ้าต้องการแข็งขึ้นเปลี่ยนเป็น `expo-secure-store` ได้
-- แอปไม่มี background worker — ข้อมูล refresh เมื่อเปิดแอป/กด pull-to-refresh
+- [ ] สร้าง release keystore (`keytool -genkeypair -v -keystore stock-alert.keystore -alias stockalert -keyalg RSA -keysize 2048 -validity 10000`)
+- [ ] ตั้ง `MY_APP_UPLOAD_STORE_FILE` ฯลฯ ใน `gradle.properties` แล้วเซ็น release build ด้วย key จริง
+- [ ] Build `armeabi-v7a` ด้วยถ้าต้องรองรับเครื่องรุ่นเก่า (ตอนนี้ arm64 เท่านั้น)
+- [ ] ตั้ง server URL โปรดักชันใน `src/config.ts`
