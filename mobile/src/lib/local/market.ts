@@ -1,7 +1,6 @@
 /**
- * Local market data — ported from the server's MockProvider.
- * Deterministic pseudo-random walk seeded per symbol; no network needed.
- * Prices are simulated (clearly labelled in the UI).
+ * Local market data — REAL quotes from Yahoo Finance only (no simulation).
+ * Cached 60s per symbol; requires internet connection.
  */
 
 export type StockQuote = {
@@ -24,57 +23,6 @@ export type AssetSearchResult = {
   type: "STOCK" | "ETF";
   currency: string;
 };
-
-const BASE_PRICES: Record<string, number> = {
-  AAPL: 227.5, MSFT: 428.1, NVDA: 132.4, TSLA: 246.8, AMZN: 205.3,
-  VOO: 560.2, VTI: 295.6, QQQM: 218.9, QQQ: 495.4, SPY: 575.8,
-};
-
-/** Extra symbols the user may add later — derive a stable base price from the name. */
-function basePriceFor(symbol: string): number {
-  const known = BASE_PRICES[symbol.toUpperCase()];
-  if (known) return known;
-  let h = 2166136261;
-  const s = symbol.toUpperCase();
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return 20 + ((h >>> 0) % 48000) / 100; // $20–$500 deterministic
-}
-
-function seededNoise(symbol: string, t: number): number {
-  let h = 2166136261;
-  const s = `${symbol}:${Math.floor(t / 60_000)}`; // changes every minute
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  const x = (h >>> 0) / 4294967295; // 0..1
-  return (x - 0.5) * 2; // -1..1
-}
-
-export function getQuote(symbol: string): StockQuote {
-  const upper = symbol.toUpperCase();
-  const base = basePriceFor(upper);
-  const now = Date.now();
-  const drift = seededNoise(upper, now) * base * 0.004;
-  const price = Math.round((base + drift) * 100) / 100;
-  const prevClose = Math.round((base + seededNoise(upper, now - 86_400_000) * base * 0.004) * 100) / 100;
-  const change = Math.round((price - prevClose) * 100) / 100;
-  return {
-    symbol: upper,
-    price,
-    change,
-    changePercent: prevClose !== 0 ? Math.round((change / prevClose) * 10000) / 100 : 0,
-    dayHigh: Math.round(Math.max(price, prevClose) * 1.005 * 100) / 100,
-    dayLow: Math.round(Math.min(price, prevClose) * 0.995 * 100) / 100,
-    previousClose: prevClose,
-    volume: 1_000_000 + Math.abs(Math.floor(seededNoise(upper, now) * 5_000_000)),
-    currency: "USD",
-    timestamp: now,
-  };
-}
 
 export function searchUniverse(keyword: string): AssetSearchResult[] {
   const UNIVERSE: AssetSearchResult[] = [
@@ -123,4 +71,95 @@ export function getUsMarketStatus(date = new Date()): { state: MarketState; labe
 
 export function isMarketOpen(date = new Date()): boolean {
   return getUsMarketStatus(date).state === "OPEN";
+}
+
+// ---------- Optional REAL quotes (Yahoo Finance — free, no API key, may be delayed ~15 min for some exchanges) ----------
+
+let realQuotesEnabled = false;
+
+export function setRealQuotesEnabled(v: boolean): void {
+  realQuotesEnabled = v;
+}
+
+export function isRealQuotesEnabled(): boolean {
+  return realQuotesEnabled;
+}
+
+type RealCacheEntry = { quote: StockQuote; fetchedAt: number };
+const realCache = new Map<string, RealCacheEntry>();
+const REAL_TTL_MS = 60_000; // re-fetch at most once a minute per symbol
+
+const YAHOO_HEADERS = { "User-Agent": "Mozilla/5.0" };
+
+/** Live quote from Yahoo Finance chart API (real market data, no key needed). */
+export async function fetchRealQuote(symbol: string): Promise<StockQuote | null> {
+  const upper = symbol.toUpperCase();
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(upper)}?interval=1d&range=5d`,
+      { headers: YAHOO_HEADERS },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      chart?: {
+        result?: Array<{
+          meta?: {
+            currency?: string;
+            regularMarketPrice?: number;
+            chartPreviousClose?: number;
+            previousClose?: number;
+            regularMarketDayHigh?: number;
+            regularMarketDayLow?: number;
+            regularMarketVolume?: number;
+          };
+        }>;
+      };
+    };
+    const meta = json.chart?.result?.[0]?.meta;
+    if (!meta || !Number.isFinite(meta.regularMarketPrice) || (meta.regularMarketPrice ?? 0) <= 0) return null;
+
+    const price = meta.regularMarketPrice!;
+    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+    const change = Math.round((price - prevClose) * 100) / 100;
+    return {
+      symbol: upper,
+      price,
+      change,
+      changePercent: prevClose !== 0 ? Math.round((change / prevClose) * 10000) / 100 : 0,
+      dayHigh: meta.regularMarketDayHigh ?? null,
+      dayLow: meta.regularMarketDayLow ?? null,
+      previousClose: prevClose,
+      volume: meta.regularMarketVolume ?? null,
+      currency: meta.currency ?? "USD",
+      timestamp: Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Refresh stale entries in the real-quote cache (fire-and-forget friendly). */
+export async function refreshRealQuotes(symbols: string[]): Promise<void> {
+  if (!realQuotesEnabled) return;
+  const now = Date.now();
+  const stale = symbols
+    .map((s) => s.toUpperCase())
+    .filter((s) => {
+      const hit = realCache.get(s);
+      return !hit || now - hit.fetchedAt > REAL_TTL_MS;
+    });
+  await Promise.all(
+    stale.map(async (s) => {
+      const quote = await fetchRealQuote(s);
+      if (quote) realCache.set(s, { quote, fetchedAt: Date.now() });
+    }),
+  );
+}
+
+/** Latest cached real quote, or null when missing/very stale (>5 min). */
+export function getCachedRealQuote(symbol: string): StockQuote | null {
+  const hit = realCache.get(symbol.toUpperCase());
+  if (!hit) return null;
+  if (Date.now() - hit.fetchedAt > 5 * 60_000) return null;
+  return hit.quote;
 }

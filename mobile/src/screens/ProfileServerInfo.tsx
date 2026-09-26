@@ -23,7 +23,7 @@ export function ProfileServerInfo() {
         </View>
         <View style={styles.row}>
           <Text style={styles.key}>ข้อมูลราคา</Text>
-          <Text style={styles.val}>จำลองในเครื่อง (simulated)</Text>
+          <Text style={styles.val}>Yahoo Finance (ราคาจริง)</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.key}>เครื่องยนต์เตือน</Text>

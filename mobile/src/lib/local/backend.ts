@@ -12,7 +12,15 @@ import {
   type NotificationLogRow,
   type NotificationPreferenceRow,
 } from "./db";
-import { getQuote, getUsMarketStatus, isMarketOpen, searchUniverse, type AssetSearchResult, type StockQuote } from "./market";
+import {
+  getCachedRealQuote,
+  getUsMarketStatus,
+  isMarketOpen,
+  refreshRealQuotes,
+  searchUniverse,
+  type AssetSearchResult,
+  type StockQuote,
+} from "./market";
 import { analyze, type EngineInput } from "./analysis-engine";
 import { playForAlert } from "../local-sounds";
 
@@ -88,7 +96,7 @@ function recordNotification(alertEventId: string | null, title: string, body: st
  * records AlertEvent rows, plays the local sound for triggers, and deactivates
  * one-time rules. Safe to call frequently.
  */
-export function runLocalPollCycle(options?: { force?: boolean }): { evaluated: number; triggered: number } {
+export async function runLocalPollCycle(options?: { force?: boolean }): Promise<{ evaluated: number; triggered: number }> {
   ensureBackend();
   const db = getDb();
   if (!options?.force && !isMarketOpen()) return { evaluated: 0, triggered: 0 };
@@ -99,11 +107,23 @@ export function runLocalPollCycle(options?: { force?: boolean }): { evaluated: n
      WHERE r.enabled = 1`,
   ) as unknown as Array<AlertRuleRow & { symbol: string; asset_name: string; asset_type: string }>;
 
+  if (rules.length === 0) return { evaluated: 0, triggered: 0 };
+
+  // Fetch REAL quotes for every distinct symbol up front (awaited so alerts
+  // always evaluate on fresh market data — never simulated).
+  const symbols = [...new Set(rules.map((r) => r.symbol))];
+  await refreshRealQuotes(symbols);
+
   let triggered = 0;
   const now = Date.now();
 
   for (const rule of rules) {
-    const quote = getQuote(rule.symbol);
+    let quote: StockQuote;
+    try {
+      quote = quoteFor(rule.symbol);
+    } catch {
+      continue; // no fresh real quote for this symbol yet (offline) — skip
+    }
     // Persist a sample for the analysis engine (dedupe per minute).
     const minuteBucket = new Date(Math.floor(now / 60_000) * 60_000).toISOString();
     const sampleId = `${rule.assetId}:${minuteBucket}`;
@@ -167,12 +187,25 @@ export function maybeAutoPoll(): void {
   const now = Date.now();
   if (now - last >= 30_000) {
     kvSet(POLL_KEY, String(now));
+    prefetchRealQuotes();
     try {
       runLocalPollCycle();
     } catch {
       // never crash the UI for background polling
     }
   }
+}
+
+// ---------- quote source: REAL ONLY (no simulated mode) ----------
+
+export function getQuoteSource(): "real" {
+  return "real";
+}
+
+/** Restore state at app start — kick off an immediate refresh. */
+export function initQuoteSource(): void {
+  ensureBackend();
+  prefetchRealQuotes();
 }
 
 // ---------- analysis service ----------
@@ -274,7 +307,28 @@ function fail(status: number, code: string, message: string): LocalResponse<neve
 }
 
 function quoteFor(symbol: string): StockQuote {
-  return getQuote(symbol);
+  // REAL market data only (Yahoo Finance). Uses the 60s cache; throws a
+  // friendly error when offline/stale so the UI can show it honestly.
+  const upper = symbol.toUpperCase();
+  const cached = getCachedRealQuote(upper);
+  if (cached) return cached;
+  throw new Error(
+    `ยังไม่มีราคาจริงของ ${upper} (ต้องต่ออินเทอร์เน็ตครั้งแรกเพื่อโหลดราคา)`,
+  );
+}
+
+/** Kick off background refresh of real quotes for watched/watchlist symbols. */
+function prefetchRealQuotes(): void {
+  try {
+    const db = getDb();
+    const symbols = db.getAllSync<{ symbol: string }>(
+      `SELECT DISTINCT a.symbol FROM watchlist_items w JOIN assets a ON a.id = w.asset_id
+       UNION SELECT DISTINCT a2.symbol FROM alert_rules r JOIN assets a2 ON a2.id = r.asset_id WHERE r.enabled = 1`,
+    );
+    void refreshRealQuotes(symbols.map((s) => s.symbol));
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -292,14 +346,24 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
   // ---- system ----
   if (pathname === "/api/system/status") {
     const market = getUsMarketStatus();
+    const source = getQuoteSource();
     return ok({
       db: true,
       pushConfigured: false,
-      marketDataProvider: "local-mock",
+      marketDataProvider: "yahoo (real)",
       marketDataProviderHealthy: true,
       market: { state: market.state, label: market.label },
       timestamp: new Date().toISOString(),
     } as unknown as T);
+  }
+
+  if (pathname === "/api/quote-source") {
+    if (m === "GET") {
+      return ok({ source: getQuoteSource() } as unknown as T);
+    }
+    if (m === "PATCH") {
+      return fail(400, "BAD_REQUEST", "แอปใช้ราคาจริงตลอดเวลา (real-only) — เปลี่ยนไม่ได้");
+    }
   }
 
   if (pathname === "/api/health") {
@@ -351,7 +415,13 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
        ORDER BY w.sort_order ASC, w.created_at ASC`,
     );
     const result = items.map((row) => {
-      const q = quoteFor(String(row.symbol));
+      let quote: { price: number; change: number; changePercent: number; currency: string } | null = null;
+      try {
+        const q = quoteFor(String(row.symbol));
+        quote = { price: q.price, change: q.change, changePercent: q.changePercent, currency: q.currency };
+      } catch {
+        quote = null; // offline / not yet fetched — UI shows "—"
+      }
       return {
         id: String(row.id),
         symbol: String(row.symbol),
@@ -359,7 +429,7 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
         exchange: String(row.exchange),
         type: String(row.type),
         alertCount: Number(row.alert_count),
-        quote: { price: q.price, change: q.change, changePercent: q.changePercent, currency: q.currency },
+        quote,
       };
     });
     return ok({ items: result } as unknown as T);
@@ -539,10 +609,11 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
       );
       return ok({ alert: { id: newId } } as unknown as T);
     } else if (action === "test") {
-      const quote = quoteFor(String(existing.target_price ? "" : ""));
-      void quote;
-      recordNotification(null, "ทดสอบการแจ้งเตือน", `นี่คือการแจ้งเตือนทดสอบจากแอป (device-local)`, "SENT");
-      return ok({ tested: true } as unknown as T);
+      // Device-local test: play the alert sound + write a notification log.
+      // There are no push devices in offline mode — "sent" counts the local playback.
+      void playForAlert();
+      recordNotification(null, "ทดสอบการแจ้งเตือน", "นี่คือการแจ้งเตือนทดสอบ (เล่นเสียงในเครื่อง) — โหมด offline ไม่มี push", "SENT");
+      return ok({ sent: 1, failed: 0, tested: true } as unknown as T);
     }
     return ok({ updated: true } as unknown as T);
   }
@@ -585,6 +656,15 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
       sentAt: String(row.sent_at),
     }));
     return ok({ logs, page: 1, pageSize, total: logs.length } as unknown as T);
+  }
+
+  if (pathname === "/api/quote-source") {
+    if (m === "GET") {
+      return ok({ source: "real" } as unknown as T);
+    }
+    if (m === "PATCH") {
+      return fail(400, "BAD_REQUEST", "แอปใช้ราคาจริงตลอดเวลา (real-only) — เปลี่ยนไม่ได้");
+    }
   }
 
   // ---- preferences ----

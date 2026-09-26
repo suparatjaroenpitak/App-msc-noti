@@ -45,9 +45,9 @@ export function AlertsScreen() {
     if (result.reason) {
       Alert.alert("ยังไม่ได้ส่ง", result.reason);
     } else if ((result.sent ?? 0) > 0) {
-      Alert.alert("ส่งแล้ว", `ส่ง notification ทดสอบ ${result.sent} เครื่อง${result.failed ? ` (ล้มเหลว ${result.failed})` : ""}`);
+      Alert.alert("ทดสอบแล้ว", "🔔 เล่นเสียงแจ้งเตือนทดสอบในเครื่องแล้ว (โหมด offline ไม่มี push — ดูประวัติได้ในหน้า ประวัติการแจ้งเตือน)");
     } else {
-      Alert.alert("ส่งไม่สำเร็จ", "ไม่มีเครื่องที่รับได้ — ดูรายละเอียดใน Delivery Logs บนเว็บ");
+      Alert.alert("ทดสอบไม่สำเร็จ", "ลองอีกครั้ง หรือตรวจเสียงในหน้า คลังเสียง");
     }
     reload();
   };

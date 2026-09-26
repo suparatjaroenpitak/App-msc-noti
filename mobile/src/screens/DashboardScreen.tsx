@@ -63,7 +63,7 @@ export function DashboardScreen() {
     <Screen refreshing={loading} onRefresh={refresh}>
       <View>
         <Text style={styles.greeting}>โหมดในเครื่อง (Offline)</Text>
-        <Text style={styles.serverUrl}>ข้อมูลราคาจำลอง + ฐานข้อมูลในแอป — ไม่ใช้เซิร์ฟเวอร์</Text>
+        <Text style={styles.serverUrl}>ราคาจริง (Yahoo Finance) + ฐานข้อมูลในแอป — ไม่ใช้เซิร์ฟเวอร์</Text>
       </View>
 
       <ErrorBanner message={error} />

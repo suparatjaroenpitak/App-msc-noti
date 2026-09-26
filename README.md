@@ -248,3 +248,27 @@ docker compose up -d --build
   - ถ้าไฟล์ยังไม่ถูก copy route จะตอบ 404 พร้อมข้อความบอก
 - ปุ่ม **iPhone / iPad** พาไปส่วนอธิบายสถานะ iOS (TestFlight) บนหน้าเดียวกัน
 - หมายเหตุ API สำหรับนักพัฒนาอยู่ท้ายหน้า (เว็บยังเสิร์ฟ API เดิมครบ)
+
+## ไฟล์ .ipa (iOS)
+
+- สั่ง build ผ่าน EAS แล้ว (บัญชี `asdrt009s-team`, project `stock-alert-mobile`)
+- build ปัจจุบันเป็น **iOS Simulator build** (ฟรี) → ได้ `StockAlert.app` แพ็กเป็น `Payload/` zip = `.ipa`
+- วางไฟล์ที่ `public/downloads/StockAlert-release.ipa` → ปุ่มดาวน์โหลดบน landing page เปิดใช้อัตโนมัติ
+- สั่ง build ใหม่:
+  ```bash
+  export EXPO_TOKEN=<token ของคุณ>
+  cd mobile   # (หรือ C:\acbuild\mobile สำหรับ build path ASCII)
+  eas build --platform ios --profile ios-simulator --non-interactive
+  # ดาวน์โหลดผลจากลิงก์ที่โชว์ (tar.gz ข้างในมี StockAlert.app) แล้วแพ็ก:
+  # mkdir Payload && cp -r StockAlert.app Payload/ && zip -qry StockAlert-release.ipa Payload
+  # cp StockAlert-release.ipa public/downloads/
+  ```
+- ติดตั้ง: .ipa แบบ simulator ใช้กับ iOS Simulator บน Mac เท่านั้น — ติดตั้งเครื่อง iPhone จริงต้องมี Apple Developer ($99/ปี) แล้ว build ด้วย profile `production`
+
+## แหล่งราคา (v1.3.0+)
+
+- **จำลอง (default)** — ราคาสุ่มในเครื่อง ทำงาน offline 100% (ไม่ใช่ราคาจริง)
+- **ราคาจริง** — เปิดได้ใน ตั้งค่า → แหล่งราคา → toggle "ใช้ราคาตลาดจริง"
+  - ดึงจาก Yahoo Finance chart API (ฟรี ไม่ต้องมี key, อาจหน่วง ~15 นาทีตามตลาด)
+  - ต้องต่อเน็ต · cache 1 นาที/symbol · ถ้าโหลดไม่ได้จะ fallback เป็นราคาจำลองอัตโนมัติ
+  - เก็บค่า preference ใน SQLite (ตาราง kv)

@@ -3,13 +3,14 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConnectionProvider } from "./src/auth";
 import { RootNavigator } from "./src/navigation/RootNavigator";
-import { ensureBackend, maybeAutoPoll } from "./src/lib/local/backend";
+import { ensureBackend, initQuoteSource, maybeAutoPoll } from "./src/lib/local/backend";
 
 export default function App() {
   // Boot the on-device backend (SQLite + seed + engines) as early as possible.
   useEffect(() => {
     try {
       ensureBackend();
+      initQuoteSource();
     } catch (err) {
       console.error("[local-backend] init failed:", err);
     }

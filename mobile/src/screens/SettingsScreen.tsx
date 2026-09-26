@@ -54,8 +54,9 @@ export function SettingsScreen() {
       <SectionTitle subtitle="ทำงานในเครื่อง 100% — ไม่ใช้เซิร์ฟเวอร์">โหมดการทำงาน</SectionTitle>
 
       <Card>
-        <Text style={styles.label}>Offline-first (local backend)</Text>
-        <Muted>ฐานข้อมูล + เครื่องยนต์เตือน + วิเคราะห์ + ราคา (จำลอง) อยู่ในแอปทั้งหมด — เปิดใช้ได้แม้ไม่มีเน็ต</Muted>
+        <Text style={styles.label}>แหล่งราคา — ราคาจริงจาก Yahoo Finance</Text>
+        <Muted>แอปใช้ราคาตลาดจริงเท่านั้น (ไม่มีโหมดจำลอง) — ต้องต่ออินเทอร์เน็ต · ราคาอาจหน่วง ~15 นาทีตามตลาด · cache 1 นาที/ตัว</Muted>
+        <Muted>ฐานข้อมูล + เครื่องยนต์เตือน + วิเคราะห์ อยู่ในแอปทั้งหมด</Muted>
       </Card>
 
       <SectionTitle subtitle="ตั้งค่าเดียวกับเว็บ PWA">การแจ้งเตือน</SectionTitle>
