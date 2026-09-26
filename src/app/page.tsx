@@ -71,9 +71,9 @@ const FEATURES = [
     text: "เอนจิน builtin-v1 ชี้จุดเข้า จุดตัดขาดทุน และเป้าหมาย พร้อมเหตุผลประกอบ (ไม่ใช่คำแนะนำการลงทุน)",
   },
   {
-    icon: "📴",
-    title: "ทำงานในเครื่อง 100%",
-    text: "ฐานข้อมูล + เครื่องยนต์เตือน + การวิเคราะห์ อยู่ในแอปทั้งหมด — ไม่ต้องสมัครสมาชิก ไม่มีข้อมูลส่งออกนอกเครื่อง",
+    icon: "🌐",
+    title: "ราคาจริงจาก Yahoo Finance",
+    text: "ดึงราคาตลาดจริง (อาจหน่วง ~15 นาที) ผ่าน Yahoo Finance — ฐานข้อมูลและการแจ้งเตือนเก็บในเครื่อง ไม่ต้องสมัครสมาชิก",
   },
   {
     icon: "🌙",
@@ -102,15 +102,15 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center">
         <p className="mb-4 inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-400">
-          🆕 เวอร์ชันใหม่ — ทำงานในเครื่องทั้งหมด ไม่ต้องใช้เซิร์ฟเวอร์
+          🆕 เวอร์ชัน 2.1.0 — ราคาจริงจาก Yahoo Finance · แจ้งเตือนทันที
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
           ติดตามหุ้น & ETF
           <span className="text-emerald-400"> แจ้งเตือนทันทีที่ราคาถึงเป้า</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-neutral-400">
-          แอปมือถือที่เก็บทุกอย่างไว้ในเครื่องคุณ — ไม่ต้องสมัครสมาชิก ไม่มีบัญชี ไม่มีข้อมูลส่งออก
-          ดาวน์โหลดติดตั้งแล้วใช้ได้เลย
+          แอปมือถือดึงราคาจริงจาก Yahoo Finance พร้อมแจ้งเตือนทันที — ไม่ต้องสมัครสมาชิก ไม่มีบัญชี
+          ข้อมูลทั้งหมดเก็บในเครื่อง ดาวน์โหลดติดตั้งแล้วใช้ได้เลย
         </p>
 
         {/* Download buttons */}
@@ -136,7 +136,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-3 text-sm text-neutral-500">
-          เวอร์ชัน 1.2.0 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
+          เวอร์ชัน 2.1.0 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
         </p>
       </section>
 
@@ -220,7 +220,7 @@ export default function LandingPage() {
           <Image src="/icons/icon-192.png" alt="Stock Alert" width={20} height={20} className="rounded" />
           <span>Stock Alert · แจ้งเตือนหุ้นในเครื่องของคุณ</span>
         </div>
-        <p className="mt-2">ข้อมูลราคาในแอปเป็นการจำลองเพื่อการใช้งาน — ไม่ใช่คำแนะนำการลงทุน</p>
+        <p className="mt-2">ข้อมูลราคาจาก Yahoo Finance (อาจหน่วง ~15 นาที) — ไม่ใช่คำแนะนำการลงทุน</p>
       </footer>
     </main>
   );

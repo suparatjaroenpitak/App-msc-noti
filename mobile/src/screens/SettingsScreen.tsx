@@ -51,7 +51,7 @@ export function SettingsScreen() {
 
   return (
     <Screen refreshing={prefs.loading || status.loading} onRefresh={() => { prefs.reload(); status.reload(); }}>
-      <SectionTitle subtitle="ทำงานในเครื่อง 100% — ไม่ใช้เซิร์ฟเวอร์">โหมดการทำงาน</SectionTitle>
+      <SectionTitle subtitle="ราคาจริงผ่าน Yahoo Finance · ข้อมูลเก็บในเครื่อง">โหมดการทำงาน</SectionTitle>
 
       <Card>
         <Text style={styles.label}>แหล่งราคา — ราคาจริงจาก Yahoo Finance</Text>

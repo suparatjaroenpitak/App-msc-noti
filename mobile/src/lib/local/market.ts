@@ -75,7 +75,7 @@ export function isMarketOpen(date = new Date()): boolean {
 
 // ---------- Optional REAL quotes (Yahoo Finance — free, no API key, may be delayed ~15 min for some exchanges) ----------
 
-let realQuotesEnabled = false;
+let realQuotesEnabled = true;
 
 export function setRealQuotesEnabled(v: boolean): void {
   realQuotesEnabled = v;
@@ -162,4 +162,21 @@ export function getCachedRealQuote(symbol: string): StockQuote | null {
   if (!hit) return null;
   if (Date.now() - hit.fetchedAt > 5 * 60_000) return null;
   return hit.quote;
+}
+
+/**
+ * On-demand fetch: try to get a fresh quote from Yahoo Finance when
+ * the cache is empty. Returns the quote or null if truly offline.
+ */
+export async function fetchAndCacheQuote(symbol: string): Promise<StockQuote | null> {
+  const upper = symbol.toUpperCase();
+  // Check cache first
+  const cached = getCachedRealQuote(upper);
+  if (cached) return cached;
+  // Try to fetch fresh
+  const quote = await fetchRealQuote(upper);
+  if (quote) {
+    realCache.set(upper, { quote, fetchedAt: Date.now() });
+  }
+  return quote;
 }

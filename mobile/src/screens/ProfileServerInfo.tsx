@@ -4,17 +4,17 @@ import { Card, Screen, SectionTitle, Badge } from "../components/ui";
 import { colors, spacing } from "../theme";
 import { APP_VERSION } from "../config";
 
-/** Read-only system info — the app runs fully on-device now. */
+/** Read-only system info — real-time prices via Yahoo Finance + local database. */
 export function ProfileServerInfo() {
   return (
     <Screen>
-      <SectionTitle subtitle="ทั้งหมดทำงานในเครื่องนี้ — ไม่พึ่งเซิร์ฟเวอร์ภายนอก">ระบบของฉัน</SectionTitle>
+      <SectionTitle subtitle="ราคาจริงจาก Yahoo Finance · ฐานข้อมูลเก็บในเครื่อง">ระบบของฉัน</SectionTitle>
       <Card>
         <View style={styles.row}>
           <Text style={styles.key}>โหมด</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-            <Badge text="OFFLINE" tone="green" />
-            <Text style={styles.val}>local backend</Text>
+            <Badge text="ONLINE" tone="green" />
+            <Text style={styles.val}>Yahoo Finance + SQLite</Text>
           </View>
         </View>
         <View style={styles.row}>
@@ -23,7 +23,7 @@ export function ProfileServerInfo() {
         </View>
         <View style={styles.row}>
           <Text style={styles.key}>ข้อมูลราคา</Text>
-          <Text style={styles.val}>Yahoo Finance (ราคาจริง)</Text>
+          <Text style={styles.val}>Yahoo Finance (ราคาจริง · ต้องต่อเน็ต)</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.key}>เครื่องยนต์เตือน</Text>

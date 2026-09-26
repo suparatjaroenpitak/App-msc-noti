@@ -62,8 +62,8 @@ export function DashboardScreen() {
   return (
     <Screen refreshing={loading} onRefresh={refresh}>
       <View>
-        <Text style={styles.greeting}>โหมดในเครื่อง (Offline)</Text>
-        <Text style={styles.serverUrl}>ราคาจริง (Yahoo Finance) + ฐานข้อมูลในแอป — ไม่ใช้เซิร์ฟเวอร์</Text>
+        <Text style={styles.greeting}>Stock Alert — ราคาจริง</Text>
+        <Text style={styles.serverUrl}>ราคาล่าสุดจาก Yahoo Finance · อัพเดททุก 30 วินาที · ข้อมูลเก็บในเครื่อง</Text>
       </View>
 
       <ErrorBanner message={error} />
@@ -79,7 +79,7 @@ export function DashboardScreen() {
       </View>
 
       <View>
-        <SectionTitle subtitle="ราคาล่าสุดจากเซิร์ฟเวอร์">Watchlist</SectionTitle>
+        <SectionTitle subtitle="ราคาล่าสุดจาก Yahoo Finance">Watchlist</SectionTitle>
         <Card>
           {watchlist.data === null && watchlist.loading ? (
             <Spinner />
@@ -104,7 +104,7 @@ export function DashboardScreen() {
                       {item.quote.change.toFixed(2)} ({item.quote.changePercent.toFixed(2)}%)
                     </Text>
                   ) : (
-                    <Text style={styles.muted}>ราคาไม่พร้อมใช้</Text>
+                    <Text style={styles.muted}>กำลังโหลดราคา…</Text>
                   )}
                 </View>
               </View>

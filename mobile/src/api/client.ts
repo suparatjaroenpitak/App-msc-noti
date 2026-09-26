@@ -42,7 +42,7 @@ export async function api<T>(
   const method = init?.method ?? "GET";
   ensureBackend();
 
-  const local = handleLocalApi<T>(method, path, init?.body);
+  const local = await handleLocalApi<T>(method, path, init?.body);
   if (local === null) {
     throw new ApiError(404, "NOT_FOUND", `ไม่รองรับคำสั่งนี้ในโหมด local: ${method} ${path}`);
   }

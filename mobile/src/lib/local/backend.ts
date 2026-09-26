@@ -13,11 +13,13 @@ import {
   type NotificationPreferenceRow,
 } from "./db";
 import {
+  fetchAndCacheQuote,
   getCachedRealQuote,
   getUsMarketStatus,
   isMarketOpen,
   refreshRealQuotes,
   searchUniverse,
+  setRealQuotesEnabled,
   type AssetSearchResult,
   type StockQuote,
 } from "./market";
@@ -118,11 +120,12 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
   const now = Date.now();
 
   for (const rule of rules) {
-    let quote: StockQuote;
+    let quote: StockQuote | null;
     try {
-      quote = quoteFor(rule.symbol);
+      quote = quoteForSync(rule.symbol);
+      if (!quote) continue; // no fresh real quote for this symbol yet — skip
     } catch {
-      continue; // no fresh real quote for this symbol yet (offline) — skip
+      continue;
     }
     // Persist a sample for the analysis engine (dedupe per minute).
     const minuteBucket = new Date(Math.floor(now / 60_000) * 60_000).toISOString();
@@ -202,9 +205,10 @@ export function getQuoteSource(): "real" {
   return "real";
 }
 
-/** Restore state at app start — kick off an immediate refresh. */
+/** Restore state at app start — enable real quotes and kick off an immediate refresh. */
 export function initQuoteSource(): void {
   ensureBackend();
+  setRealQuotesEnabled(true);
   prefetchRealQuotes();
 }
 
@@ -306,14 +310,22 @@ function fail(status: number, code: string, message: string): LocalResponse<neve
   return { ok: false, status, code, message };
 }
 
-function quoteFor(symbol: string): StockQuote {
-  // REAL market data only (Yahoo Finance). Uses the 60s cache; throws a
-  // friendly error when offline/stale so the UI can show it honestly.
+function quoteForSync(symbol: string): StockQuote | null {
+  // Try cache first (synchronous, for poll cycle)
+  const upper = symbol.toUpperCase();
+  return getCachedRealQuote(upper);
+}
+
+async function quoteForAsync(symbol: string): Promise<StockQuote> {
+  // REAL market data only (Yahoo Finance). Try cache first, then fetch on-demand.
   const upper = symbol.toUpperCase();
   const cached = getCachedRealQuote(upper);
   if (cached) return cached;
+  // Cache miss — try fetching from Yahoo Finance
+  const fresh = await fetchAndCacheQuote(upper);
+  if (fresh) return fresh;
   throw new Error(
-    `ยังไม่มีราคาจริงของ ${upper} (ต้องต่ออินเทอร์เน็ตครั้งแรกเพื่อโหลดราคา)`,
+    `ไม่สามารถโหลดราคาของ ${upper} ได้ — ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต`,
   );
 }
 
@@ -335,7 +347,7 @@ function prefetchRealQuotes(): void {
  * Handle an API call entirely locally. Mirrors the server route shapes.
  * Returns null when the path is unknown (caller can fall back).
  */
-export function handleLocalApi<T>(method: string, path: string, body?: unknown): LocalResponse<T> | null {
+export async function handleLocalApi<T>(method: string, path: string, body?: unknown): Promise<LocalResponse<T> | null> {
   ensureBackend();
   const db = getDb();
   const m = method.toUpperCase();
@@ -383,7 +395,7 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
   if (segments[0] === "assets" && segments[1] && m === "GET") {
     const symbol = decodeURIComponent(segments[1]).toUpperCase();
     const asset = ensureAsset(symbol);
-    const quote = quoteFor(symbol);
+    const quote = await quoteForAsync(symbol);
     return ok({
       asset,
       quote: {
@@ -402,7 +414,7 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
   }
 
   if (segments[0] === "market" && segments[1] === "quote" && segments[2] && m === "GET") {
-    const q = quoteFor(decodeURIComponent(segments[2]));
+    const q = await quoteForAsync(decodeURIComponent(segments[2]));
     return ok({ quote: { ...q, timestamp: new Date(q.timestamp).toISOString() } } as unknown as T);
   }
 
@@ -414,13 +426,15 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
        FROM watchlist_items w JOIN assets a ON a.id = w.asset_id
        ORDER BY w.sort_order ASC, w.created_at ASC`,
     );
-    const result = items.map((row) => {
+    const result = await Promise.all(items.map(async (row) => {
       let quote: { price: number; change: number; changePercent: number; currency: string } | null = null;
       try {
-        const q = quoteFor(String(row.symbol));
-        quote = { price: q.price, change: q.change, changePercent: q.changePercent, currency: q.currency };
+        const q = await fetchAndCacheQuote(String(row.symbol));
+        if (q) {
+          quote = { price: q.price, change: q.change, changePercent: q.changePercent, currency: q.currency };
+        }
       } catch {
-        quote = null; // offline / not yet fetched — UI shows "—"
+        quote = null; // offline / fetch failed — UI shows "กำลังโหลด…"
       }
       return {
         id: String(row.id),
@@ -431,7 +445,7 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
         alertCount: Number(row.alert_count),
         quote,
       };
-    });
+    }));
     return ok({ items: result } as unknown as T);
   }
 
@@ -520,7 +534,7 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
     try {
       const settings = getAnalysisSettings();
       if (settings.enabled && settings.suggestOnCreate) {
-        const quote = quoteFor(String(assetRow.symbol));
+        const quote = await quoteForAsync(String(assetRow.symbol));
         suggestEntryPrice(String(assetRow.symbol), quote);
       }
     } catch {
@@ -744,7 +758,7 @@ export function handleLocalApi<T>(method: string, path: string, body?: unknown):
     const symbol = String(b?.symbol ?? "").toUpperCase();
     if (!symbol) return fail(400, "BAD_REQUEST", "ระบุ symbol ก่อน");
     const asset = findAssetBySymbol(symbol) ?? ensureAsset(symbol);
-    const quote = quoteFor(symbol);
+    const quote = await quoteForAsync(symbol);
     const outcome = suggestEntryPrice(symbol, quote);
     if (!outcome.ok) return fail(400, "BAD_REQUEST", outcome.error);
     const r = outcome.result;
