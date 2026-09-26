@@ -1,10 +1,8 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { api } from "./api/client";
-import { DEFAULT_SERVER_URL } from "./config";
+import React, { createContext, useContext, useMemo } from "react";
 
 /**
- * Connection context — the server URL is FIXED in src/config.ts.
- * There is no server-switching UI and no authentication (auth removed).
+ * Connection context — the whole backend now runs on-device.
+ * No server URL exists anymore; this only carries mode info for the UI.
  */
 
 export type ServerUser = { id: string; name: string; email: string };
@@ -12,9 +10,9 @@ export type ServerUser = { id: string; name: string; email: string };
 type ConnectionContextValue = {
   ready: boolean;
   serverUrl: string;
-  /** Server-side default user info (best-effort; not used for access control). */
+  /** Always "local" — kept so screens don't need changes. */
   user: ServerUser | null;
-  /** Re-fetch the server's default user info. */
+  /** No-op (kept for screens that still call it). */
   refreshUser: () => void;
 };
 
@@ -26,22 +24,15 @@ export function useConnection(): ConnectionContextValue {
   return ctx;
 }
 
-/** Back-compat alias for screens that used `useAuth`. */
+/** Back-compat alias. */
 export const useAuth = useConnection;
 
+const LOCAL_USER: ServerUser = { id: "local", name: "โหมดในเครื่อง", email: "local://device" };
+
 export function ConnectionProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<ServerUser | null>(null);
-
-  // Best-effort fetch of the server's default user info (for the server info screen).
-  const loadUser = useCallback(() => {
-    api<{ user: ServerUser }>("/api/auth-user")
-      .then((res) => setUser(res.user))
-      .catch(() => setUser(null));
-  }, []);
-
   const value = useMemo<ConnectionContextValue>(
-    () => ({ ready: true, serverUrl: DEFAULT_SERVER_URL, user, refreshUser: loadUser }),
-    [user, loadUser],
+    () => ({ ready: true, serverUrl: "local://device", user: LOCAL_USER, refreshUser: () => {} }),
+    [],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

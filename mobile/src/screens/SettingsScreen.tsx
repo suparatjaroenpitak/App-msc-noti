@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../api/client";
-import { useAuth } from "../auth";
 import { getVolume as getLocalVolume, setVolume as setLocalVolume } from "../lib/local-sounds";
 import { useApi, errorMessage } from "../hooks/useApi";
 import { Card, ErrorBanner, Muted, Screen, SectionTitle, Spinner } from "../components/ui";
@@ -23,7 +22,6 @@ const PREFS: { key: keyof Preferences; label: string }[] = [
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
-  const { serverUrl } = useAuth();
   const status = useApi<SystemStatus>("/api/system/status");
   const prefs = useApi<{ preferences: Preferences }>("/api/notification-preferences");
   const [savingPref, setSavingPref] = useState<string | null>(null);
@@ -53,11 +51,11 @@ export function SettingsScreen() {
 
   return (
     <Screen refreshing={prefs.loading || status.loading} onRefresh={() => { prefs.reload(); status.reload(); }}>
-      <SectionTitle subtitle={serverUrl.replace(/^https?:\/\//, "")}>การเชื่อมต่อ</SectionTitle>
+      <SectionTitle subtitle="ทำงานในเครื่อง 100% — ไม่ใช้เซิร์ฟเวอร์">โหมดการทำงาน</SectionTitle>
 
       <Card>
-        <Text style={styles.label}>เซิร์ฟเวอร์ (กำหนดถาวรในแอป)</Text>
-        <Muted>เชื่อมต่อกับ {serverUrl.replace(/^https?:\/\//, "")} — ไม่สามารถเปลี่ยนได้จากในแอป</Muted>
+        <Text style={styles.label}>Offline-first (local backend)</Text>
+        <Muted>ฐานข้อมูล + เครื่องยนต์เตือน + วิเคราะห์ + ราคา (จำลอง) อยู่ในแอปทั้งหมด — เปิดใช้ได้แม้ไม่มีเน็ต</Muted>
       </Card>
 
       <SectionTitle subtitle="ตั้งค่าเดียวกับเว็บ PWA">การแจ้งเตือน</SectionTitle>

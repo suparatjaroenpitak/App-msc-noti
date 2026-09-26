@@ -1,36 +1,38 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { useConnection } from "../auth";
-import { Button, Card, Screen, SectionTitle } from "../components/ui";
+import { Card, Screen, SectionTitle, Badge } from "../components/ui";
 import { colors, spacing } from "../theme";
+import { APP_VERSION } from "../config";
 
-/** Read-only server info — the URL is fixed in src/config.ts (no switching UI). */
+/** Read-only system info — the app runs fully on-device now. */
 export function ProfileServerInfo() {
-  const { serverUrl, user, refreshUser } = useConnection();
-
   return (
     <Screen>
-      <SectionTitle subtitle="เซิร์ฟเวอร์ถูกกำหนดถาวรในแอป (แก้ได้เฉพาะโค้ด)">เซิร์ฟเวอร์</SectionTitle>
+      <SectionTitle subtitle="ทั้งหมดทำงานในเครื่องนี้ — ไม่พึ่งเซิร์ฟเวอร์ภายนอก">ระบบของฉัน</SectionTitle>
       <Card>
         <View style={styles.row}>
-          <Text style={styles.key}>API URL</Text>
-          <Text style={styles.val} numberOfLines={1} adjustsFontSizeToFit>
-            {serverUrl.replace(/^https?:\/\//, "")}
-          </Text>
-        </View>
-      </Card>
-
-      <SectionTitle subtitle="ผู้ใช้เดียวของอินสแตนซ์นี้ (อัตโนมัติ)">ข้อมูลผู้ใช้</SectionTitle>
-      <Card>
-        <View style={styles.row}>
-          <Text style={styles.key}>ชื่อ</Text>
-          <Text style={styles.val}>{user?.name ?? "—"}</Text>
+          <Text style={styles.key}>โหมด</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+            <Badge text="OFFLINE" tone="green" />
+            <Text style={styles.val}>local backend</Text>
+          </View>
         </View>
         <View style={styles.row}>
-          <Text style={styles.key}>อีเมล</Text>
-          <Text style={styles.val}>{user?.email ?? "—"}</Text>
+          <Text style={styles.key}>ฐานข้อมูล</Text>
+          <Text style={styles.val}>SQLite ในแอป</Text>
         </View>
-        <Button title="รีเฟรชข้อมูล" size="sm" variant="secondary" onPress={refreshUser} />
+        <View style={styles.row}>
+          <Text style={styles.key}>ข้อมูลราคา</Text>
+          <Text style={styles.val}>จำลองในเครื่อง (simulated)</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.key}>เครื่องยนต์เตือน</Text>
+          <Text style={styles.val}>ตรวจทุก 30 วินาที (แอปเปิดอยู่)</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.key}>เวอร์ชัน</Text>
+          <Text style={styles.val}>{APP_VERSION}</Text>
+        </View>
       </Card>
     </Screen>
   );

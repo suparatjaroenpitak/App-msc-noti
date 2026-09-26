@@ -25,7 +25,6 @@ function timeAgo(iso: string): string {
 }
 
 export function DashboardScreen() {
-  const { serverUrl } = useAuth(); // connection info only (auth removed)
   const status = useApi<SystemStatus>("/api/system/status");
   const watchlist = useApi<{ items: WatchItem[] }>("/api/watchlist");
   const alerts = useApi<{ alerts: AlertRow[] }>("/api/alerts");
@@ -63,8 +62,8 @@ export function DashboardScreen() {
   return (
     <Screen refreshing={loading} onRefresh={refresh}>
       <View>
-        <Text style={styles.greeting}>{serverUrl.replace(/^https?:\/\//, "")}</Text>
-        <Text style={styles.serverUrl}>{serverUrl}</Text>
+        <Text style={styles.greeting}>โหมดในเครื่อง (Offline)</Text>
+        <Text style={styles.serverUrl}>ข้อมูลราคาจำลอง + ฐานข้อมูลในแอป — ไม่ใช้เซิร์ฟเวอร์</Text>
       </View>
 
       <ErrorBanner message={error} />

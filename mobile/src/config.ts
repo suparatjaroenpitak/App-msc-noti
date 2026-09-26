@@ -1,7 +1,5 @@
 /**
- * เซิร์ฟเวอร์หลักของแอป (fix ถาวร — ไม่มีหน้าเปลี่ยนเซิร์ฟเวอร์แล้ว)
- * ถ้าต้องการชี้ไปที่อื่น แก้ค่านี้แล้ว build ใหม่
+ * แอปทำงานในเครื่อง 100% (offline-first) — ไม่มีเซิร์ฟเวอร์ภายนอก
+ * ฐานข้อมูล SQLite + เครื่องยนต์เตือน + วิเคราะห์ อยู่ในแอปทั้งหมด
  */
-export const DEFAULT_SERVER_URL = "https://stock-alert-web-h2hf.onrender.com";
-
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "2.0.0";

@@ -1,10 +1,11 @@
-# Stock Alert Mobile (Android)
+# Stock Alert Mobile (Android / iOS)
 
-แอปมือถือ Android สำหรับ Stock Alert (React Native 0.86 + Expo SDK 57, TypeScript)
+แอปมือถือ Stock Alert (React Native 0.86 + Expo SDK 57, TypeScript)
 
-> **ไม่มีระบบยืนยันตัวตน (auth removed)** — เปิดแอปแล้วใช้งานได้ทันที ไม่ต้อง login/สมัครสมาชิก
-> ข้อมูลทั้งหมดผูกกับ "ผู้ใช้เดียว" ของเซิร์ฟเวอร์ที่เชื่อมต่อ (สร้างให้อัตโนมัติ)
-> **เซิร์ฟเวอร์ fix ถาวร** ที่ `https://stock-alert-web-h2hf.onrender.com` (แก้ได้เฉพาะใน `src/config.ts` แล้ว build ใหม่ — ไม่มีหน้าเปลี่ยนเซิร์ฟเวอร์ในแอป)
+> **🆕 v1.2.0: ทำงานในเครื่อง 100% (offline-first)** — ย้ายบริการทั้งหมดจากเซิร์ฟเวอร์ (Render) มาไว้ในแอป
+> ฐานข้อมูล SQLite ในเครื่อง + เครื่องยนต์เตือน (ตรวจทุก 30 วินาที) + วิเคราะห์ราคา + คลังเสียง
+> **ไม่มีการเรียก API ภายนอกเลย** — เปิดใช้ได้แม้ไม่มีอินเทอร์เน็ต
+> ข้อมูลราคาเป็น **การจำลอง (simulated)** ในเครื่อง ไม่ใช่ราคาตลาดจริง
 
 ## APK ที่ build แล้ว
 
@@ -95,6 +96,20 @@ cp app/build/outputs/apk/release/app-release.apk "$SRC/apk/StockAlert-release.ap
 - [ ] สร้าง release keystore (`keytool -genkeypair -v -keystore stock-alert.keystore -alias stockalert -keyalg RSA -keysize 2048 -validity 10000`)
 - [ ] ตั้ง `MY_APP_UPLOAD_STORE_FILE` ฯลฯ ใน `gradle.properties` แล้วเซ็น release build ด้วย key จริง
 
+## สถาปัตยกรรม (v1.2.0+)
+
+```
+แอป (APK/IPA)
+├── src/lib/local/db.ts        ← SQLite: assets, watchlist, alerts, events, analysis, prefs
+├── src/lib/local/market.ts    ← ราคาจำลอง + เวลาตลาดสหรัฐ (ET)
+├── src/lib/local/analysis-engine.ts ← เอนจินวิเคราะห์ builtin-v1 (ตัวเดียวกับ server เดิม)
+├── src/lib/local/backend.ts   ← "API" ทั้งหมดบนเครื่อง + alert engine (poll ทุก 30 วิ)
+├── src/lib/local-sounds.ts    ← คลังเสียงในเครื่อง (built-in + import)
+└── src/api/client.ts          ← route ทุก call เข้า local backend (ไม่มี network)
+```
+
+หน้าจอทุกหน้าใช้โค้ดเดิม — แค่เปลี่ยนว่า `api()` เรียก local แทน HTTP
+
 ## Build สำหรับ iOS / iPad
 
 ต้อง build ผ่าน **EAS Build (คลาวด์ของ Expo)** เพราะ compile แอป iOS ต้องใช้ macOS/Xcode เท่านั้น (ห้ามบน Windows)
@@ -126,6 +141,7 @@ eas build --platform android --profile production # Android ก็ใช้ EAS 
 | แจกจ่ายจริง / TestFlight / App Store | **Apple Developer Program $99/ปี** |
 
 - bundle id: `com.stockalert.mobile` (แก้ได้ใน app.json → ios.bundleIdentifier)
+- **iOS ได้อยู่แล้วทั้งชุด** — โค้ด local backend ทำงานบน iOS เหมือน Android (SQLite ผ่าน expo-sqlite รองรับทั้งสอง platform)
 - ถ้า EAS ถามเรื่อง credentials เลือก "Let EAS manage credentials" ทั้งหมดได้เลย
 - หน้าแอปเป็น dark theme ทั้งหมด — iPad รองรับทั้ง portrait/landscape (ปรับใน app.json → ios.infoPlist)
 - แอปเสียงแจ้งเตือนใช้ `expo-audio` ซึ่งรองรับ iOS อยู่แล้ว ไม่ต้องตั้งค่าเพิ่ม

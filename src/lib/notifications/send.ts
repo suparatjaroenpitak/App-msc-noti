@@ -75,7 +75,8 @@ export async function sendAlertNotification(
           title,
           body,
           tag: `alert-${input.alertRuleId}`,
-          url: `/assets/${input.symbol}`,
+          // Web UI was removed (API-only) — deep links now point at the API status page.
+          url: "/",
           alertEventId: input.alertEventId,
           symbol: input.symbol,
           soundUrl,
@@ -137,7 +138,7 @@ export async function sendTestNotification(userId: string, deviceName?: string):
   for (const sub of subscriptions) {
     const result = await sendPush(
       { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
-      { title, body, tag: "test", url: "/dashboard" },
+      { title, body, tag: "test", url: "/" },
     );
     if (result.ok) sent += 1;
     else {

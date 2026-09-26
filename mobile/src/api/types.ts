@@ -121,8 +121,19 @@ export type AnalysisSettings = {
   minSamples: number;
 };
 
+export type Suggestion = {
+  engine: string;
+  verdict: string | null; // BUY | SELL | HOLD | WAIT | AVOID
+  suggestedEntryPrice: number | null;
+  suggestedStopPrice: number | null;
+  suggestedTargetPrice: number | null;
+  confidence: number | null;
+  horizonDays: number | null;
+  rationale: string | null;
+};
+
 export type SuggestPriceResult = {
-  analysis: AnalysisRow;
+  suggestion: Suggestion;
 };
 
 export type QuoteDetail = Quote & {

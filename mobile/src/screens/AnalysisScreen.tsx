@@ -10,12 +10,20 @@ function fmtPrice(n: number | null | undefined): string {
   return typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : "-";
 }
 
-const VERDICT_TONE: Record<string, "green" | "amber" | "red"> = {
+const VERDICT_TONE: Record<string, "green" | "amber" | "red" | "blue"> = {
   BUY: "green",
+  SELL: "red",
+  HOLD: "blue",
   WAIT: "amber",
   AVOID: "red",
 };
-const VERDICT_LABEL: Record<string, string> = { BUY: "น่าซื้อ", WAIT: "รอก่อน", AVOID: "เลี่ยง" };
+const VERDICT_LABEL: Record<string, string> = {
+  BUY: "น่าซื้อ",
+  SELL: "ควรขาย",
+  HOLD: "ถือต่อ",
+  WAIT: "รอก่อน",
+  AVOID: "เลี่ยง",
+};
 
 export function AnalysisScreen() {
   const settings = useApi<{ settings: AnalysisSettings }>("/api/analysis/settings");
@@ -43,14 +51,17 @@ export function AnalysisScreen() {
         method: "POST",
         body: { symbol: sym },
       });
+      // API shape: { suggestion: { verdict, suggestedEntryPrice, ... } } (ไม่ใช่ analysis)
+      const s = res.suggestion;
       Alert.alert(
         `ผลวิเคราะห์ ${sym}`,
         [
-          res.analysis.verdict ? `คำแนะนำ: ${VERDICT_LABEL[res.analysis.verdict] ?? res.analysis.verdict}` : null,
-          res.analysis.suggestedEntryPrice ? `ราคาเข้า: ${fmtPrice(res.analysis.suggestedEntryPrice)}` : null,
-          res.analysis.suggestedStopPrice ? `ตัดขาดทุน: ${fmtPrice(res.analysis.suggestedStopPrice)}` : null,
-          res.analysis.suggestedTargetPrice ? `เป้าหมาย: ${fmtPrice(res.analysis.suggestedTargetPrice)}` : null,
-          res.analysis.rationale,
+          s.verdict ? `คำแนะนำ: ${VERDICT_LABEL[s.verdict] ?? s.verdict}` : null,
+          s.suggestedEntryPrice != null ? `ราคาเข้า: ${fmtPrice(s.suggestedEntryPrice)}` : null,
+          s.suggestedStopPrice != null ? `ตัดขาดทุน: ${fmtPrice(s.suggestedStopPrice)}` : null,
+          s.suggestedTargetPrice != null ? `เป้าหมาย: ${fmtPrice(s.suggestedTargetPrice)}` : null,
+          s.confidence != null ? `ความมั่นใจ: ${Math.round(s.confidence * 100)}%` : null,
+          s.rationale ?? null,
         ]
           .filter(Boolean)
           .join("\n"),

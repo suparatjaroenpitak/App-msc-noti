@@ -77,7 +77,7 @@ self.addEventListener("push", (event) => {
     silent: false,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    data: { url: payload.url || "/dashboard", symbol: payload.symbol, alertEventId: payload.alertEventId },
+    data: { url: payload.url || "/", symbol: payload.symbol, alertEventId: payload.alertEventId },
     actions: payload.symbol ? [{ action: "open", title: "เปิดดูราคา" }] : [],
   };
 
@@ -93,7 +93,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || "/dashboard";
+  const target = (event.notification.data && event.notification.data.url) || "/";
 
   event.waitUntil(
     (async () => {

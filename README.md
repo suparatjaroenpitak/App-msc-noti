@@ -234,3 +234,17 @@ docker compose up -d --build
 ## API
 
 ดูสรุปครบใน `ARCHITECTURE.md` §9 — ทุก endpoint คืน `{ ok, data }` / `{ ok:false, error }` เสมอ
+
+## Landing Page + ดาวน์โหลด APK
+
+หน้าแรกของเว็บ (`/`) เป็น landing page สำหรับดาวน์โหลดแอป:
+
+- ปุ่ม **ดาวน์โหลดสำหรับ Android (.apk)** → `/downloads/StockAlert-release.apk`
+  - เสิร์ฟผ่าน route `src/app/downloads/[file]/route.ts` (Content-Type ถูกต้อง + Content-Disposition ชื่อไฟล์สวย)
+  - ไฟล์จริงอยู่ที่ `public/downloads/StockAlert-release.apk` — **อัปเดตด้วยการ copy ทับจาก `mobile/apk/` หลัง build ใหม่ทุกครั้ง:**
+    ```bash
+    cp "mobile/apk/StockAlert-release.apk" "public/downloads/StockAlert-release.apk"
+    ```
+  - ถ้าไฟล์ยังไม่ถูก copy route จะตอบ 404 พร้อมข้อความบอก
+- ปุ่ม **iPhone / iPad** พาไปส่วนอธิบายสถานะ iOS (TestFlight) บนหน้าเดียวกัน
+- หมายเหตุ API สำหรับนักพัฒนาอยู่ท้ายหน้า (เว็บยังเสิร์ฟ API เดิมครบ)
