@@ -4,7 +4,7 @@
 
 > **ไม่มีระบบยืนยันตัวตน (auth removed)** — เปิดแอปแล้วใช้งานได้ทันที ไม่ต้อง login/สมัครสมาชิก
 > ข้อมูลทั้งหมดผูกกับ "ผู้ใช้เดียว" ของเซิร์ฟเวอร์ที่เชื่อมต่อ (สร้างให้อัตโนมัติ)
-> เปลี่ยนเซิร์ฟเวอร์ได้ที่หน้า ตั้งค่า → เซิร์ฟเวอร์ (API URL)
+> **เซิร์ฟเวอร์ fix ถาวร** ที่ `https://stock-alert-web-h2hf.onrender.com` (แก้ได้เฉพาะใน `src/config.ts` แล้ว build ใหม่ — ไม่มีหน้าเปลี่ยนเซิร์ฟเวอร์ในแอป)
 
 ## APK ที่ build แล้ว
 
@@ -21,10 +21,11 @@
 - **Dashboard** — ดูราคาล่าสุด + สถานะ alert แบบเรียลไทม์ (เปิดแอปมาเจอเลย ไม่มีหน้า login)
 - **Watchlist** — เพิ่ม/ลบ/ค้นหาหุ้น/ETF
 - **Alerts** — สร้าง/แก้ไข/ลบ/พักการแจ้งเตือน (ทุก type และ condition เหมือนเว็บ)
-- **Sounds** — ดู/อัปโหลดไฟล์เสียง/เปลี่ยนชื่อ/ตั้งเสียงดีฟอลต์/ทดลองเล่น/ลบ
+- **Sounds (local-only)** — เลือก/นำเข้าไฟล์เสียงจากเครื่อง, เปลี่ยนชื่อ, ตั้งเสียงดีฟอลต์, ทดลองเล่น, ลบ — **ทั้งหมดเก็บในเครื่อง ไม่ส่งขึ้นเซิร์ฟเวอร์** (มีเสียงในตัว 4 เสียง: Ding/Chime/Alert/Bell)
+- **เสียงเตือนตอน trigger** — เมื่อ Alert ที่ watch อยู่ trigger และแอปเปิดอยู่ แอปจะเล่นเสียงที่เลือกไว้ในเครื่องทันที (ไม่ผ่านเซิร์ฟเวอร์)
 - **History** — ประวัติ Alert ที่ trigger + log การแจ้งเตือนที่ส่ง
-- **Analysis** — ตั้งค่าการวิเคราะห์, สั่งวิเคราะห์ราคาแนะนำ, ดูประวัติการวิเคราะห์
-- **เซิร์ฟเวอร์ (แทน Profile เดิม)** — เปลี่ยน server URL, ดูข้อมูลผู้ใช้เดฟอลต์ (อ่านอย่างเดียว), ปรับความดังเสียงย้ายไปที่ Settings
+- **ต่อ Alert** — แต่ละ Alert เลือกเสียงของตัวเองได้จากคลังเสียงในเครื่อง (เมื่อราคา trigger และแอปเปิดอยู่ จะเล่นเสียงนั้นทันที)
+- **เซิร์ฟเวอร์ (แทน Profile เดิม)** — ดู URL/ข้อมูลผู้ใช้เดฟอลต์ (อ่านอย่างเดียว — fix ถาวรแล้ว)
 - **Settings** — เปลี่ยน server URL, ดูสถานะระบบ, ออกจากระบบ
 
 ปลายทาง API ดีฟอลต์ชี้ไปที่เซิร์ฟเวอร์ที่ตั้งไว้ใน `src/config.ts` (เปลี่ยนได้ในหน้า Settings ของแอป)
@@ -93,4 +94,38 @@ cp app/build/outputs/apk/release/app-release.apk "$SRC/apk/StockAlert-release.ap
 
 - [ ] สร้าง release keystore (`keytool -genkeypair -v -keystore stock-alert.keystore -alias stockalert -keyalg RSA -keysize 2048 -validity 10000`)
 - [ ] ตั้ง `MY_APP_UPLOAD_STORE_FILE` ฯลฯ ใน `gradle.properties` แล้วเซ็น release build ด้วย key จริง
-- [ ] ตั้ง server URL โปรดักชันใน `src/config.ts` (ตอนนี้ดีฟอลต์ `http://10.0.2.2:3000` สำหรับ emulator)
+
+## Build สำหรับ iOS / iPad
+
+ต้อง build ผ่าน **EAS Build (คลาวด์ของ Expo)** เพราะ compile แอป iOS ต้องใช้ macOS/Xcode เท่านั้น (ห้ามบน Windows)
+รวม iPad แล้ว (`supportsTablet: true` ใน app.json → รันบน iPad ได้เต็มจอ)
+
+### เตรียมครั้งแรก
+
+```bash
+npm install -g eas-cli
+cd mobile
+eas login          # สมัครบัญชีฟรีที่ https://expo.dev ถ้ายังไม่มี
+eas config:push    # ข้ามได้ถ้าไม่ใช้ push
+```
+
+### สั่ง build
+
+```bash
+eas build --platform ios --profile production     # ไฟล์ .ipa สำหรับเครื่องจริง/App Store
+eas build --platform ios --profile ios-simulator  # สำหรับ iOS Simulator (ฟรี ไม่ต้องมีบัญชี Apple Developer)
+eas build --platform android --profile production # Android ก็ใช้ EAS ได้เหมือนกัน
+```
+
+### ข้อจำกัดของ iOS ที่ต้องรู้
+
+| กรณี | ต้องมีอะไร |
+|---|---|
+| รันบน **iOS Simulator** | ไม่ต้องมีบัญชี Apple Developer (ฟรี) |
+| ติดตั้ง **เครื่อง iPhone/iPad จริง** ของตัวเอง | Apple ID ฟรี + ต่อสาย USB ผ่าน Xcode (แอปหมดอายุต้อง reinstall ทุก 7 วัน) หรือ EAS internal distribution |
+| แจกจ่ายจริง / TestFlight / App Store | **Apple Developer Program $99/ปี** |
+
+- bundle id: `com.stockalert.mobile` (แก้ได้ใน app.json → ios.bundleIdentifier)
+- ถ้า EAS ถามเรื่อง credentials เลือก "Let EAS manage credentials" ทั้งหมดได้เลย
+- หน้าแอปเป็น dark theme ทั้งหมด — iPad รองรับทั้ง portrait/landscape (ปรับใน app.json → ios.infoPlist)
+- แอปเสียงแจ้งเตือนใช้ `expo-audio` ซึ่งรองรับ iOS อยู่แล้ว ไม่ต้องตั้งค่าเพิ่ม

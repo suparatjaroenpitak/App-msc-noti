@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
+import { getVolume as getLocalVolume, setVolume as setLocalVolume } from "../lib/local-sounds";
 import { useApi, errorMessage } from "../hooks/useApi";
-import { Button, Card, ErrorBanner, Input, Muted, Screen, SectionTitle, Spinner } from "../components/ui";
+import { Card, ErrorBanner, Muted, Screen, SectionTitle, Spinner } from "../components/ui";
 import type { Preferences, SystemStatus } from "../api/types";
 import type { RootStackParamList } from "../navigation/types";
 import { APP_VERSION } from "../config";
@@ -22,25 +23,17 @@ const PREFS: { key: keyof Preferences; label: string }[] = [
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
-  const { serverUrl, setServerUrl, user } = useAuth();
+  const { serverUrl } = useAuth();
   const status = useApi<SystemStatus>("/api/system/status");
   const prefs = useApi<{ preferences: Preferences }>("/api/notification-preferences");
-  const [urlDraft, setUrlDraft] = useState(serverUrl);
-  const [savingUrl, setSavingUrl] = useState(false);
   const [savingPref, setSavingPref] = useState<string | null>(null);
   const [prefsError, setPrefsError] = useState<string | null>(null);
+  const [localVolume, setLocalVolumeState] = useState<number | null>(null);
 
-  const saveServerUrl = async () => {
-    setSavingUrl(true);
-    try {
-      await setServerUrl(urlDraft);
-      Alert.alert("บันทึกแล้ว", "เปลี่ยนเซิร์ฟเวอร์เรียบร้อย");
-    } catch (err) {
-      Alert.alert("บันทึกไม่สำเร็จ", errorMessage(err));
-    } finally {
-      setSavingUrl(false);
-    }
-  };
+  // Device-local volume (not the server preference).
+  useEffect(() => {
+    void getLocalVolume().then(setLocalVolumeState);
+  }, []);
 
   const togglePref = async (key: keyof Preferences, value: boolean) => {
     setSavingPref(key);
@@ -63,17 +56,8 @@ export function SettingsScreen() {
       <SectionTitle subtitle={serverUrl.replace(/^https?:\/\//, "")}>การเชื่อมต่อ</SectionTitle>
 
       <Card>
-        <Text style={styles.label}>เซิร์ฟเวอร์ (API URL)</Text>
-        <Input value={urlDraft} onChangeText={setUrlDraft} keyboardType="url" placeholder="https://your-app.onrender.com" />
-        <Button
-          title="บันทึกเซิร์ฟเวอร์"
-          size="sm"
-          variant="secondary"
-          loading={savingUrl}
-          disabled={urlDraft.trim() === serverUrl}
-          onPress={() => void saveServerUrl()}
-        />
-        <Muted>ไม่มีระบบบัญชี — เปลี่ยนเซิร์ฟเวอร์ได้ทันที ข้อมูลอยู่ที่เซิร์ฟเวอร์ที่เชื่อมต่อ</Muted>
+        <Text style={styles.label}>เซิร์ฟเวอร์ (กำหนดถาวรในแอป)</Text>
+        <Muted>เชื่อมต่อกับ {serverUrl.replace(/^https?:\/\//, "")} — ไม่สามารถเปลี่ยนได้จากในแอป</Muted>
       </Card>
 
       <SectionTitle subtitle="ตั้งค่าเดียวกับเว็บ PWA">การแจ้งเตือน</SectionTitle>
@@ -97,7 +81,7 @@ export function SettingsScreen() {
           <Muted>โหลดการตั้งค่าไม่สำเร็จ</Muted>
         )}
         <ErrorBanner message={prefsError ?? prefs.error} />
-        <VolumeControl volume={prefs.data?.preferences.volume ?? null} onSaved={(v) => prefs.setData({ preferences: { ...prefs.data!.preferences, volume: v } })} />
+        <VolumeControl volume={localVolume} onSaved={setLocalVolumeState} />
         <Pressable onPress={() => navigation.navigate("Sounds")}>
           <Text style={styles.link}>🔊 จัดการเสียงแจ้งเตือน →</Text>
         </Pressable>
@@ -148,15 +132,13 @@ function VolumeControl({ volume, onSaved }: { volume: number | null; onSaved: (v
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (volume === null) return null;
+  // Volume is a device-local setting (AsyncStorage) — no API involved.
   const save = async (v: number) => {
     setSaving(true);
     setError(null);
     try {
-      const res = await api<{ preferences: Preferences }>("/api/notification-preferences", {
-        method: "PATCH",
-        body: { volume: v },
-      });
-      onSaved(res.preferences.volume);
+      await setLocalVolume(v);
+      onSaved(v);
     } catch (err) {
       setError(errorMessage(err));
     } finally {

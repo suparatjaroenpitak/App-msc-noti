@@ -13,7 +13,8 @@ import {
   SectionTitle,
   Spinner,
 } from "../components/ui";
-import type { AlertRow, AssetSearchResult, SoundRow } from "../api/types";
+import type { AlertRow, AssetSearchResult } from "../api/types";
+import { getAlertSoundId, listSounds, saveAlertSoundId, type LocalSound } from "../lib/local-sounds";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, radius, spacing } from "../theme";
 
@@ -53,16 +54,16 @@ export function AlertFormScreen() {
   const [cooldownMinutes, setCooldownMinutes] = useState("60");
   const [oneTime, setOneTime] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
-  const [soundId, setSoundId] = useState<string | null>(null);
-  const [sounds, setSounds] = useState<SoundRow[]>([]);
+  const [alertSoundId, setAlertSoundId] = useState<string | null | undefined>(undefined);
+  const [sounds, setSounds] = useState<LocalSound[]>([]);
 
-  // Load existing alert (edit mode) + sound library.
+  // Load existing alert (edit mode) + local sound library (no API for sounds).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const soundList = await api<{ sounds: SoundRow[] }>("/api/notification-sounds");
-        if (!cancelled) setSounds(soundList.sounds);
+        const soundList = await listSounds();
+        if (!cancelled) setSounds(soundList);
       } catch {
         // sound library is optional
       }
@@ -79,7 +80,8 @@ export function AlertFormScreen() {
           setCooldownMinutes(String(alert.cooldownMinutes));
           setOneTime(alert.oneTime);
           setNotificationMessage(alert.notificationMessage ?? "");
-          setSoundId(alert.soundId ?? null);
+          // Local per-alert sound override (kept on this device only).
+          setAlertSoundId(await getAlertSoundId(alertId));
         } catch (err) {
           if (!cancelled) setError(errorMessage(err));
         } finally {
@@ -167,12 +169,17 @@ export function AlertFormScreen() {
         cooldownMinutes: Math.round(cooldown),
         oneTime,
         notificationMessage: notificationMessage.trim() ? notificationMessage.trim() : null,
-        soundId,
       };
       if (alertId) {
         await api(`/api/alerts/${alertId}`, { method: "PATCH", body: payload });
+        // Remember the chosen sound locally for this alert (not sent to the server).
+        await saveAlertSoundId(alertId, alertSoundId ?? null);
       } else {
-        await api("/api/alerts", { method: "POST", body: { ...payload, assetId, enabled: true } });
+        const created = await api<{ alert: AlertRow }>("/api/alerts", {
+          method: "POST",
+          body: { ...payload, assetId, enabled: true },
+        });
+        await saveAlertSoundId(created.alert.id, alertSoundId ?? null);
       }
       navigation.goBack();
     } catch (err) {
@@ -292,22 +299,24 @@ export function AlertFormScreen() {
           multiline
         />
 
-        <Text style={styles.label}>เสียงแจ้งเตือน (เล่นเมื่อเปิดแอป/เว็บอยู่)</Text>
+        <Text style={styles.label}>เสียงแจ้งเตือน (เก็บในเครื่องนี้ — เล่นเมื่อแอปเปิดอยู่)</Text>
         <View style={styles.optionRow}>
           <Pressable
-            onPress={() => setSoundId(null)}
-            style={[styles.option, soundId === null && styles.optionActive]}
+            onPress={() => setAlertSoundId(null)}
+            style={[styles.option, (alertSoundId ?? null) === null && styles.optionActive]}
           >
-            <Text style={[styles.optionText, soundId === null && styles.optionTextActive]}>ค่าเริ่มต้น</Text>
+            <Text style={[styles.optionText, (alertSoundId ?? null) === null && styles.optionTextActive]}>
+              ค่าเริ่มต้นของเครื่อง
+            </Text>
           </Pressable>
           {sounds.map((sound) => (
             <Pressable
               key={sound.id}
-              onPress={() => setSoundId(sound.id)}
-              style={[styles.option, soundId === sound.id && styles.optionActive]}
+              onPress={() => setAlertSoundId(sound.id)}
+              style={[styles.option, alertSoundId === sound.id && styles.optionActive]}
             >
               <Text
-                style={[styles.optionText, soundId === sound.id && styles.optionTextActive]}
+                style={[styles.optionText, alertSoundId === sound.id && styles.optionTextActive]}
                 numberOfLines={1}
               >
                 {sound.name}

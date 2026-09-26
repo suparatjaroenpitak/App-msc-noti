@@ -1,7 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_SERVER_URL } from "../config";
 
-const SERVER_KEY = "stock_alert_server_url";
+/**
+ * API client — the server URL is fixed in src/config.ts (no switching UI).
+ * Authentication has been removed entirely; all calls are unauthenticated.
+ */
 
 export class ApiError extends Error {
   constructor(
@@ -13,28 +15,9 @@ export class ApiError extends Error {
   }
 }
 
-let cachedServer: string | null = null;
-
-export function normalizeServerUrl(url: string): string {
-  const trimmed = url.trim().replace(/\/+$/, "");
-  if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
-  return trimmed;
-}
-
+/** Fixed server URL (no per-device override). */
 export function getServerUrl(): string {
-  return cachedServer?.trim() ? cachedServer.replace(/\/+$/, "") : DEFAULT_SERVER_URL;
-}
-
-/** Restore the saved server URL (no auth state — authentication was removed). */
-export async function restoreSession(): Promise<{ token: string | null; serverUrl: string | null }> {
-  const serverUrl = await AsyncStorage.getItem(SERVER_KEY);
-  cachedServer = serverUrl;
-  return { token: null, serverUrl };
-}
-
-export async function persistServerUrl(url: string): Promise<void> {
-  cachedServer = url;
-  await AsyncStorage.setItem(SERVER_KEY, url);
+  return DEFAULT_SERVER_URL;
 }
 
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string; details?: unknown } };
@@ -43,7 +26,7 @@ export function authHeaders(): Record<string, string> {
   return {};
 }
 
-/** Fetch against the configured server, unwrapping the { ok, data } envelope. */
+/** Fetch against the fixed server, unwrapping the { ok, data } envelope. */
 export async function api<T>(
   path: string,
   init?: Omit<RequestInit, "body"> & { body?: unknown },

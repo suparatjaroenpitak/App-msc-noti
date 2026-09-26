@@ -6,10 +6,7 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
@@ -20,8 +17,17 @@
     "production": {
       "autoIncrement": true,
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
+      },
+      "ios": {
+        "image": "latest"
       }
+    },
+    "ios-simulator": {
+      "ios": {
+        "simulator": true
+      },
+      "extends": "production"
     }
   },
   "submit": {

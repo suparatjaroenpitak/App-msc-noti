@@ -1,138 +1,111 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { createAudioPlayer, type AudioPlayer, type AudioStatus } from "expo-audio";
-import * as DocumentPicker from "expo-document-picker";
-import { api, authHeaders, getServerUrl } from "../api/client";
-import { useApi, errorMessage } from "../hooks/useApi";
-import { Badge, Button, Card, EmptyState, ErrorBanner, Muted, Screen, SectionTitle, Spinner } from "../components/ui";
-import type { SoundRow } from "../api/types";
+import { errorMessage } from "../hooks/useApi";
+import {
+  deleteSound,
+  getDefaultSoundId,
+  getVolume,
+  importSound,
+  listSounds,
+  previewSound,
+  renameSound,
+  setDefaultSound,
+  setVolume,
+  stopPreview,
+  type LocalSound,
+} from "../lib/local-sounds";
+import { Badge, Button, Card, EmptyState, ErrorBanner, Muted, Screen, SectionTitle } from "../components/ui";
 import { colors, spacing } from "../theme";
 
 export function SoundsScreen() {
-  const { data, error, loading, reload } = useApi<{ sounds: SoundRow[] }>("/api/notification-sounds");
+  const [sounds, setSounds] = useState<LocalSound[] | null>(null);
+  const [defaultId, setDefaultId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const playerRef = useRef<AudioPlayer | null>(null);
-  const playerSoundRef = useRef<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const importRef = useRef(false);
 
-  const upload = async () => {
-    setUploadError(null);
+  const reload = useCallback(async () => {
     try {
-      const pick = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
-      if (pick.canceled || pick.assets.length === 0) return;
-      const asset = pick.assets[0];
-      if (asset.size && asset.size > 10 * 1024 * 1024) {
-        setUploadError("ไฟล์ใหญ่เกิน 10 MB");
-        return;
-      }
-      setUploading(true);
-      const form = new FormData();
-      form.append("file", { uri: asset.uri, name: asset.name ?? "sound.mp3", type: asset.mimeType ?? "audio/mpeg" } as unknown as Blob);
-      form.append("name", (asset.name ?? "เสียงของฉัน").replace(/\.[^.]+$/, "").slice(0, 60));
-      await api("/api/notification-sounds", { method: "POST", body: form });
-      reload();
+      const [list, def] = await Promise.all([listSounds(), getDefaultSoundId()]);
+      setSounds(list);
+      setDefaultId(def);
     } catch (err) {
-      setUploadError(errorMessage(err));
-    } finally {
-      setUploading(false);
+      setError(errorMessage(err));
     }
-  };
-
-  const rename = (sound: SoundRow) => {
-    Alert.prompt(
-      "เปลี่ยนชื่อเสียง",
-      "ชื่อใหม่ (ไม่เกิน 60 ตัวอักษร)",
-      async (text) => {
-        const trimmed = (text ?? "").trim();
-        if (!trimmed) return;
-        try {
-          setBusyId(sound.id);
-          await api(`/api/notification-sounds/${sound.id}`, { method: "PATCH", body: { name: trimmed.slice(0, 60) } });
-          reload();
-        } catch (err) {
-          Alert.alert("เปลี่ยนชื่อไม่สำเร็จ", errorMessage(err));
-        } finally {
-          setBusyId(null);
-        }
-      },
-      "plain-text",
-      sound.name,
-    );
-  };
-
-  const stop = useCallback(() => {
-    try {
-      playerRef.current?.pause();
-    } catch {
-      // player already released
-    }
-    setPlayingId(null);
-    playerSoundRef.current = null;
   }, []);
 
   useEffect(() => {
-    return () => {
-      try {
-        playerRef.current?.remove();
-      } catch {
-        // ignore
-      }
-    };
-  }, []);
+    void reload();
+    return () => stopPreview();
+  }, [reload]);
 
-  const preview = (sound: SoundRow) => {
-    if (playerSoundRef.current === sound.id && playingId === sound.id) {
-      stop();
+  const upload = async () => {
+    if (importRef.current) return;
+    importRef.current = true;
+    setError(null);
+    try {
+      const created = await importSound();
+      if (created) await reload();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      importRef.current = false;
+    }
+  };
+
+  const rename = (sound: LocalSound) => {
+    if (sound.kind === "builtin") {
+      Alert.alert("เสียงในตัว", "เปลี่ยนชื่อเสียงในตัวไม่ได้ — สร้าง/นำเข้าเสียงของคุณเองเพื่อตั้งชื่อได้");
       return;
     }
+    Alert.prompt("เปลี่ยนชื่อเสียง", "ชื่อใหม่ (ไม่เกิน 60 ตัวอักษร)", async (text) => {
+      const trimmed = (text ?? "").trim();
+      if (!trimmed) return;
+      try {
+        await renameSound(sound.id, trimmed);
+        await reload();
+      } catch (err) {
+        Alert.alert("เปลี่ยนชื่อไม่สำเร็จ", errorMessage(err));
+      }
+    }, "plain-text", sound.name);
+  };
+
+  const preview = async (sound: LocalSound) => {
     try {
-      playerRef.current?.remove();
-    } catch {
-      // ignore
-    }
-    try {
-      // Sound files are private per user → attach the bearer token.
-      const player = createAudioPlayer({
-        uri: `${getServerUrl()}${sound.fileUrl}`,
-        headers: authHeaders(),
-      });
-      playerRef.current = player;
-      playerSoundRef.current = sound.id;
-      player.play();
-      setPlayingId(sound.id);
-      player.addListener("playbackStatusUpdate", (status: AudioStatus) => {
-        if (status.didJustFinish) setPlayingId(null);
-      });
+      const next = await previewSound(sound, playingId);
+      setPlayingId(next);
+      if (next !== null) {
+        // Auto-clear when finished (approximate by duration).
+        const ms = Math.max(500, (sound.duration ?? 1.2) * 1000 + 250);
+        setTimeout(() => setPlayingId((cur) => (cur === next ? null : cur)), ms);
+      }
     } catch (err) {
       setPlayingId(null);
       Alert.alert("เล่นเสียงไม่ได้", errorMessage(err));
     }
   };
 
-  const activate = async (sound: SoundRow) => {
-    setBusyId(sound.id);
+  const activate = async (sound: LocalSound) => {
     try {
-      await api(`/api/notification-sounds/${sound.id}/activate`, { method: "POST" });
-      reload();
+      await setDefaultSound(sound.id);
+      await reload();
     } catch (err) {
       Alert.alert("ตั้งค่าไม่สำเร็จ", errorMessage(err));
-    } finally {
-      setBusyId(null);
     }
   };
 
-  const remove = (sound: SoundRow) => {
-    Alert.alert(`ลบเสียง "${sound.name}"?`, "Alert ที่ใช้เสียงนี้จะกลับไปใช้เสียงเริ่มต้น", [
+  const remove = (sound: LocalSound) => {
+    Alert.alert(`ลบเสียง "${sound.name}"?`, "ลบจากเครื่องนี้เท่านั้น", [
       { text: "ยกเลิก", style: "cancel" },
       {
         text: "ลบ",
         style: "destructive",
         onPress: async () => {
           try {
-            await api(`/api/notification-sounds/${sound.id}`, { method: "DELETE" });
-            reload();
+            stopPreview();
+            await deleteSound(sound.id);
+            await reload();
           } catch (err) {
             Alert.alert("ลบไม่สำเร็จ", errorMessage(err));
           }
@@ -141,24 +114,22 @@ export function SoundsScreen() {
     ]);
   };
 
-  const sounds = data?.sounds ?? [];
-
   return (
-    <Screen refreshing={loading} onRefresh={reload}>
-      <SectionTitle subtitle="เสียงจะเล่นเมื่อแอป/เว็บเปิดอยู่ — เบื้องหลังใช้เสียงระบบ">
-        คลังเสียง
+    <Screen refreshing={false} onRefresh={() => void reload()}>
+      <SectionTitle subtitle="เก็บในเครื่องนี้เท่านั้น — ไม่อัปโหลดขึ้นเซิร์ฟเวอร์">
+        คลังเสียงของเครื่อง
       </SectionTitle>
-      <ErrorBanner message={uploadError} />
-      <Button title={uploading ? "กำลังอัปโหลด…" : "＋ เลือกไฟล์เสียงจากเครื่อง"} onPress={upload} disabled={uploading} />
+      <ErrorBanner message={error} />
+      <Button title={busy ? "กำลังนำเข้า…" : "＋ เลือกไฟล์เสียงจากเครื่อง"} onPress={() => void upload()} />
       <Card>
-        {loading && data === null ? (
-          <Spinner />
+        {sounds === null ? (
+          <Muted>กำลังโหลด…</Muted>
         ) : sounds.length === 0 ? (
-          <EmptyState title="ยังไม่มีเสียง" description="กดปุ่มด้านล่างเพื่อเลือกไฟล์เสียงจากเครื่อง (mp3, wav, ogg, m4a — ไม่เกิน 10 MB)" />
+          <EmptyState title="ยังไม่มีเสียง" description="กดปุ่มเพื่อเลือกไฟล์เสียงจากเครื่อง (mp3, wav, ogg, m4a — ไม่เกิน 10 MB)" />
         ) : (
           sounds.map((sound, index) => (
             <View key={sound.id} style={[styles.row, index > 0 && styles.rowBorder]}>
-              <Pressable onPress={() => preview(sound)} style={styles.playButton}>
+              <Pressable onPress={() => void preview(sound)} style={styles.playButton}>
                 <Text style={styles.playIcon}>{playingId === sound.id ? "■" : "▶"}</Text>
               </Pressable>
               <View style={{ flex: 1 }}>
@@ -166,35 +137,35 @@ export function SoundsScreen() {
                   <Text style={styles.name} numberOfLines={1}>
                     {sound.name}
                   </Text>
-                  {sound.isDefault ? <Badge text="Default" tone="green" /> : null}
+                  {defaultId === sound.id ? <Badge text="Default" tone="green" /> : null}
+                  {sound.kind === "builtin" ? <Badge text="ในตัว" tone="gray" /> : null}
                 </View>
                 <Text style={styles.muted}>
-                  {sound.mimeType} · {Math.round(sound.fileSize / 1024)} KB
-                  {sound.duration ? ` · ${sound.duration.toFixed(1)}s` : ""}
+                  {sound.kind === "builtin"
+                    ? `เสียงสังเคราะห์ · ${sound.duration?.toFixed(1)}s`
+                    : `${Math.round(sound.size / 1024)} KB${sound.duration ? ` · ${sound.duration.toFixed(1)}s` : ""}`}
                 </Text>
               </View>
               <View style={styles.actions}>
-                {sound.isDefault ? null : (
-                  <Button
-                    title="ตั้งเป็นค่าเริ่มต้น"
-                    size="sm"
-                    variant="secondary"
-                    loading={busyId === sound.id}
-                    onPress={() => void activate(sound)}
-                  />
+                {defaultId === sound.id ? null : (
+                  <Button title="ตั้งเป็นค่าเริ่มต้น" size="sm" variant="secondary" onPress={() => void activate(sound)} />
                 )}
-                <Pressable onPress={() => rename(sound)} hitSlop={8}>
-                  <Text style={styles.rename}>เปลี่ยนชื่อ</Text>
-                </Pressable>
-                <Pressable onPress={() => remove(sound)} hitSlop={8}>
-                  <Text style={styles.delete}>ลบ</Text>
-                </Pressable>
+                {sound.kind === "imported" ? (
+                  <>
+                    <Pressable onPress={() => rename(sound)} hitSlop={8}>
+                      <Text style={styles.rename}>เปลี่ยนชื่อ</Text>
+                    </Pressable>
+                    <Pressable onPress={() => remove(sound)} hitSlop={8}>
+                      <Text style={styles.delete}>ลบ</Text>
+                    </Pressable>
+                  </>
+                ) : null}
               </View>
             </View>
           ))
         )}
       </Card>
-      <Muted>รองรับ mp3, wav, ogg, m4a — ไม่เกิน 10 MB / 30 วินาที · เสียงที่อัปโหลดใช้ได้ทั้งแอปและเว็บทันที</Muted>
+      <Muted>เสียงทั้งหมดเก็บในเครื่อง (ไม่ sync ขึ้นเซิร์ฟเวอร์) — ใช้กับการเล่นเสียงเตือนในแอปนี้โดยตรง</Muted>
     </Screen>
   );
 }

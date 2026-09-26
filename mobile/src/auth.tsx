@@ -1,11 +1,10 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { api } from "./api/client";
 import { DEFAULT_SERVER_URL } from "./config";
 
 /**
- * Server connection context — authentication has been removed entirely.
- * The app remembers only which server it talks to; every API call is unauthenticated.
+ * Connection context — the server URL is FIXED in src/config.ts.
+ * There is no server-switching UI and no authentication (auth removed).
  */
 
 export type ServerUser = { id: string; name: string; email: string };
@@ -13,13 +12,11 @@ export type ServerUser = { id: string; name: string; email: string };
 type ConnectionContextValue = {
   ready: boolean;
   serverUrl: string;
-  setServerUrl: (url: string) => Promise<void>;
   /** Server-side default user info (best-effort; not used for access control). */
   user: ServerUser | null;
-  setUser: (user: ServerUser | null) => void;
+  /** Re-fetch the server's default user info. */
+  refreshUser: () => void;
 };
-
-const SERVER_KEY = "server.url";
 
 const ConnectionContext = createContext<ConnectionContextValue | null>(null);
 
@@ -32,41 +29,19 @@ export function useConnection(): ConnectionContextValue {
 /** Back-compat alias for screens that used `useAuth`. */
 export const useAuth = useConnection;
 
-function normalizeServerUrl(url: string): string {
-  const trimmed = url.trim().replace(/\/+$/, "");
-  if (!trimmed) return DEFAULT_SERVER_URL;
-  return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
 export function ConnectionProvider({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
-  const [serverUrl, setServerUrlState] = useState(DEFAULT_SERVER_URL);
   const [user, setUser] = useState<ServerUser | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(SERVER_KEY);
-        if (!cancelled && saved) setServerUrlState(normalizeServerUrl(saved));
-      } finally {
-        if (!cancelled) setReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const setServerUrl = useCallback(async (url: string) => {
-    const normalized = normalizeServerUrl(url);
-    await AsyncStorage.setItem(SERVER_KEY, normalized);
-    setServerUrlState(normalized);
+  // Best-effort fetch of the server's default user info (for the server info screen).
+  const loadUser = useCallback(() => {
+    api<{ user: ServerUser }>("/api/auth-user")
+      .then((res) => setUser(res.user))
+      .catch(() => setUser(null));
   }, []);
 
   const value = useMemo<ConnectionContextValue>(
-    () => ({ ready, serverUrl, setServerUrl, user, setUser }),
-    [ready, serverUrl, setServerUrl, user],
+    () => ({ ready: true, serverUrl: DEFAULT_SERVER_URL, user, refreshUser: loadUser }),
+    [user, loadUser],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

@@ -1,8 +1,7 @@
 /**
- * แก้ URL เริ่มต้นของเซิร์ฟเวอร์ได้ที่นี่ (หรือในหน้า Settings ของแอป)
- * - ทดสอบบน Android Emulator กับเครื่องตัวเอง: http://10.0.2.2:3000
- * - ใช้งานจริง (Render): https://<ชื่อแอป>.onrender.com
+ * เซิร์ฟเวอร์หลักของแอป (fix ถาวร — ไม่มีหน้าเปลี่ยนเซิร์ฟเวอร์แล้ว)
+ * ถ้าต้องการชี้ไปที่อื่น แก้ค่านี้แล้ว build ใหม่
  */
-export const DEFAULT_SERVER_URL = "http://10.0.2.2:3000";
+export const DEFAULT_SERVER_URL = "https://stock-alert-web-h2hf.onrender.com";
 
 export const APP_VERSION = "1.0.0";
