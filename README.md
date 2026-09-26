@@ -272,3 +272,10 @@ docker compose up -d --build
   - ดึงจาก Yahoo Finance chart API (ฟรี ไม่ต้องมี key, อาจหน่วง ~15 นาทีตามตลาด)
   - ต้องต่อเน็ต · cache 1 นาที/symbol · ถ้าโหลดไม่ได้จะ fallback เป็นราคาจำลองอัตโนมัติ
   - เก็บค่า preference ใน SQLite (ตาราง kv)
+
+## v2.0.0 — REAL QUOTES ONLY
+
+- **ราคาจริงเท่านั้น** (Yahoo Finance) — ตัดโหมดจำลองออกทั้งหมด (ลบ mock provider จาก market.ts)
+- ต้องต่ออินเทอร์เน็ต: quote แรกของแต่ละ symbol ต้องโหลดออนไลน์ ถ้า offline จะแสดง "—" พร้อม error บอกผู้ใช้
+- cache 60 วินาที/symbol · worker poll รอ refresh ราคาจริงก่อน evaluate ทุกรอบ
+- `/api/quote-source` ยังมีไว้เพื่อ compat แต่ PATCH จะตอบ 400 (real-only)
