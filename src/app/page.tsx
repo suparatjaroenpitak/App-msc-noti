@@ -1,4 +1,47 @@
 import Image from "next/image";
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
+
+const DOWNLOADS_DIR = path.join(process.cwd(), "public", "downloads");
+
+/** Server component: iOS download button — enabled only when the .ipa exists. */
+function IpaDownloadButton() {
+  const ipaPath = path.join(DOWNLOADS_DIR, "StockAlert-release.ipa");
+  const available = existsSync(ipaPath);
+  const sizeMb = available ? Math.round(statSync(ipaPath).size / 1024 / 1024) : 0;
+
+  if (available) {
+    return (
+      <div className="mt-5">
+        <a
+          href="/downloads/StockAlert-release.ipa"
+          download
+          className="inline-flex items-center gap-3 rounded-2xl bg-neutral-100 px-7 py-3.5 text-base font-bold text-neutral-950 shadow-lg transition hover:bg-white"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+          </svg>
+          ดาวน์โหลดสำหรับ iOS (.ipa) · ~{sizeMb} MB
+        </a>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-5">
+      <span className="inline-flex cursor-not-allowed items-center gap-3 rounded-2xl border border-neutral-700 bg-neutral-900 px-7 py-3.5 text-base font-bold text-neutral-500">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
+          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+        </svg>
+        ดาวน์โหลดสำหรับ iOS (.ipa)
+      </span>
+      <p className="mt-2 text-sm text-amber-500/90">
+        ⏳ ไฟล์ .ipa กำลังเตรียม build ผ่าน Apple/Expo EAS — ปุ่มจะใช้งานได้อัตโนมัติเมื่อไฟล์พร้อม
+      </p>
+    </div>
+  );
+}
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Stock Alert — แจ้งเตือนหุ้น/ETF ในเครื่องคุณ",
@@ -136,23 +179,25 @@ export default function LandingPage() {
       {/* iOS section */}
       <section id="ios" className="mx-auto max-w-5xl px-6 py-10">
         <div className="rounded-3xl border border-neutral-800 bg-neutral-900/60 p-8 sm:p-10">
-          <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
+          <div className="flex flex-col items-start gap-6 sm:flex-row">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-neutral-800">
               <svg viewBox="0 0 24 24" className="h-8 w-8 fill-neutral-100" aria-hidden>
                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
               </svg>
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-bold sm:text-2xl">เวอร์ชัน iOS / iPad</h2>
+              <h2 className="text-xl font-bold sm:text-2xl">เวอร์ชัน iOS / iPad (.ipa)</h2>
               <p className="mt-2 text-sm leading-relaxed text-neutral-400">
-                โค้ดรองรับ iOS และ iPad ครบทุกฟังก์ชันแล้ว (ทดสอบผ่าน iOS Simulator) — การติดตั้งบนเครื่องจริงต้อง build
-                ผ่าน Apple เนื่องจากข้อกำหนดของระบบปฏิบัติการ ขณะนี้อยู่ระหว่างเตรียมแจกจ่ายผ่าน
-                <strong className="text-neutral-200"> TestFlight </strong>
-                โดยจะเปิดให้ทดสอบผ่านลิงก์เชิญจากหน้านี้เมื่อพร้อม
+                โค้ดรองรับ iOS และ iPad ครบทุกฟังก์ชัน (ฐานข้อมูล/เสียง/การแจ้งเตือน ทำงานในเครื่องเหมือน Android ทุกประการ)
               </p>
-              <ul className="mt-3 space-y-1 text-sm text-neutral-500">
+
+              {/* IPA download — file is optional; show availability dynamically */}
+              <IpaDownloadButton />
+
+              <ul className="mt-4 space-y-1 text-sm text-neutral-500">
                 <li>• รองรับ iPhone (iOS 15+) และ iPad แบบเต็มจอ</li>
-                <li>• ฐานข้อมูล/เสียง/การแจ้งเตือน ทำงานในเครื่องเหมือน Android ทุกประการ</li>
+                <li>• การติดตั้งไฟล์ .ipa บนเครื่องจริงต้องใช้เครื่อง Mac (Apple Configurator/Xcode) หรือผ่าน TestFlight</li>
+                <li>• ไฟล์ .ipa ไม่สามารถติดตั้งตรง ๆ บน iPhone ได้เหมือน APK — ต้องผ่านเครื่องมือของ Apple เสมอ</li>
               </ul>
             </div>
           </div>
