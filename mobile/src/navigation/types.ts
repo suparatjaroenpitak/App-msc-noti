@@ -2,6 +2,11 @@ export type RootStackParamList = {
   Tabs: undefined;
   AlertForm: { id?: string };
   Sounds: undefined;
+  History: undefined;
+  Analysis: undefined;
+  Profile: undefined;
+  Login: undefined;
+  Register: undefined;
 };
 
 export type TabParamList = {

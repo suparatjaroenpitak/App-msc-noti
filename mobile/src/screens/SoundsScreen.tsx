@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { createAudioPlayer, type AudioPlayer, type AudioStatus } from "expo-audio";
+import * as DocumentPicker from "expo-document-picker";
 import { api, authHeaders, getServerUrl } from "../api/client";
 import { useApi, errorMessage } from "../hooks/useApi";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Muted, Screen, SectionTitle, Spinner } from "../components/ui";
@@ -11,8 +12,55 @@ export function SoundsScreen() {
   const { data, error, loading, reload } = useApi<{ sounds: SoundRow[] }>("/api/notification-sounds");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
   const playerSoundRef = useRef<string | null>(null);
+
+  const upload = async () => {
+    setUploadError(null);
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
+      if (pick.canceled || pick.assets.length === 0) return;
+      const asset = pick.assets[0];
+      if (asset.size && asset.size > 10 * 1024 * 1024) {
+        setUploadError("ไฟล์ใหญ่เกิน 10 MB");
+        return;
+      }
+      setUploading(true);
+      const form = new FormData();
+      form.append("file", { uri: asset.uri, name: asset.name ?? "sound.mp3", type: asset.mimeType ?? "audio/mpeg" } as unknown as Blob);
+      form.append("name", (asset.name ?? "เสียงของฉัน").replace(/\.[^.]+$/, "").slice(0, 60));
+      await api("/api/notification-sounds", { method: "POST", body: form });
+      reload();
+    } catch (err) {
+      setUploadError(errorMessage(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const rename = (sound: SoundRow) => {
+    Alert.prompt(
+      "เปลี่ยนชื่อเสียง",
+      "ชื่อใหม่ (ไม่เกิน 60 ตัวอักษร)",
+      async (text) => {
+        const trimmed = (text ?? "").trim();
+        if (!trimmed) return;
+        try {
+          setBusyId(sound.id);
+          await api(`/api/notification-sounds/${sound.id}`, { method: "PATCH", body: { name: trimmed.slice(0, 60) } });
+          reload();
+        } catch (err) {
+          Alert.alert("เปลี่ยนชื่อไม่สำเร็จ", errorMessage(err));
+        } finally {
+          setBusyId(null);
+        }
+      },
+      "plain-text",
+      sound.name,
+    );
+  };
 
   const stop = useCallback(() => {
     try {
@@ -100,12 +148,13 @@ export function SoundsScreen() {
       <SectionTitle subtitle="เสียงจะเล่นเมื่อแอป/เว็บเปิดอยู่ — เบื้องหลังใช้เสียงระบบ">
         คลังเสียง
       </SectionTitle>
-      <ErrorBanner message={error} />
+      <ErrorBanner message={uploadError} />
+      <Button title={uploading ? "กำลังอัปโหลด…" : "＋ เลือกไฟล์เสียงจากเครื่อง"} onPress={upload} disabled={uploading} />
       <Card>
         {loading && data === null ? (
           <Spinner />
         ) : sounds.length === 0 ? (
-          <EmptyState title="ยังไม่มีเสียง" description="อัปโหลดเสียงได้จากเว็บ PWA (หน้า Sounds)" />
+          <EmptyState title="ยังไม่มีเสียง" description="กดปุ่มด้านล่างเพื่อเลือกไฟล์เสียงจากเครื่อง (mp3, wav, ogg, m4a — ไม่เกิน 10 MB)" />
         ) : (
           sounds.map((sound, index) => (
             <View key={sound.id} style={[styles.row, index > 0 && styles.rowBorder]}>
@@ -134,6 +183,9 @@ export function SoundsScreen() {
                     onPress={() => void activate(sound)}
                   />
                 )}
+                <Pressable onPress={() => rename(sound)} hitSlop={8}>
+                  <Text style={styles.rename}>เปลี่ยนชื่อ</Text>
+                </Pressable>
                 <Pressable onPress={() => remove(sound)} hitSlop={8}>
                   <Text style={styles.delete}>ลบ</Text>
                 </Pressable>
@@ -142,7 +194,7 @@ export function SoundsScreen() {
           ))
         )}
       </Card>
-      <Muted>การอัปโหลดเสียงใหม่ทำได้จากเว็บ PWA (หน้า Sounds) แล้วเสียงจะ sync มาที่นี่อัตโนมัติ</Muted>
+      <Muted>รองรับ mp3, wav, ogg, m4a — ไม่เกิน 10 MB / 30 วินาที · เสียงที่อัปโหลดใช้ได้ทั้งแอปและเว็บทันที</Muted>
     </Screen>
   );
 }
@@ -163,5 +215,6 @@ const styles = StyleSheet.create({
   name: { color: colors.text, fontWeight: "700", flexShrink: 1 },
   muted: { color: colors.textMuted, fontSize: 11 },
   actions: { alignItems: "flex-end", gap: spacing.xs },
+  rename: { color: colors.info, fontWeight: "700", fontSize: 12 },
   delete: { color: colors.danger, fontWeight: "700", fontSize: 12 },
 });

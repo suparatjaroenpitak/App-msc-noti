@@ -105,3 +105,42 @@ export async function api<T>(
   }
   return json.data;
 }
+
+/** Register a new account from the mobile app and store the bearer token. */
+export async function registerRequest(
+  name: string,
+  email: string,
+  password: string,
+  serverUrl: string,
+): Promise<{ user: { id: string; name: string; email: string } }> {
+  const url = `${normalizeServerUrl(serverUrl)}/api/auth/token`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "register", name, email, password }),
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${normalizeServerUrl(serverUrl)})`);
+  }
+  const json = (await res.json().catch(() => null)) as Envelope<{
+    token: string;
+    user: { id: string; name: string; email: string };
+  }> | null;
+  if (!json || !json.ok) {
+    const err = json && !json.ok ? json.error : null;
+    throw new ApiError(res.status, err?.code ?? "ERROR", err?.message ?? `สมัครสมาชิกไม่สำเร็จ (${res.status})`);
+  }
+  await persistServerUrl(normalizeServerUrl(serverUrl));
+  await persistToken(json.data.token);
+  return { user: json.data.user };
+}
+
+/** Request a password-reset token (dev servers return devToken). */
+export async function forgotPasswordRequest(email: string): Promise<{ devToken?: string }> {
+  return api<{ message: string; devToken?: string }>("/api/auth/forgot-password", {
+    method: "POST",
+    body: { email },
+  });
+}

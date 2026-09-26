@@ -108,6 +108,15 @@ export function SettingsScreen() {
         <Pressable onPress={() => navigation.navigate("Sounds")}>
           <Text style={styles.link}>🔊 จัดการเสียงแจ้งเตือน →</Text>
         </Pressable>
+        <Pressable onPress={() => navigation.navigate("History")}>
+          <Text style={styles.link}>🕘 ประวัติการแจ้งเตือน →</Text>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate("Analysis")}>
+          <Text style={styles.link}>🤖 วิเคราะห์ราคาแนะนำ →</Text>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate("Profile")}>
+          <Text style={styles.link}>👤 โปรไฟล์ / เปลี่ยนรหัสผ่าน →</Text>
+        </Pressable>
       </Card>
 
       <SectionTitle>สถานะระบบ</SectionTitle>

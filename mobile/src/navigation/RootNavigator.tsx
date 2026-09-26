@@ -9,6 +9,10 @@ import { WatchlistScreen } from "../screens/WatchlistScreen";
 import { AlertsScreen } from "../screens/AlertsScreen";
 import { AlertFormScreen } from "../screens/AlertFormScreen";
 import { SoundsScreen } from "../screens/SoundsScreen";
+import { HistoryScreen } from "../screens/HistoryScreen";
+import { AnalysisScreen } from "../screens/AnalysisScreen";
+import { ProfileScreen } from "../screens/ProfileScreen";
+import { RegisterScreen } from "../screens/RegisterScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { LoginScreen } from "../screens/LoginScreen";
 import { Spinner } from "../components/ui";
@@ -88,9 +92,15 @@ export function RootNavigator() {
               options={{ title: "Alert", presentation: "card" }}
             />
             <Stack.Screen name="Sounds" component={SoundsScreen} options={{ title: "เสียงแจ้งเตือน" }} />
+            <Stack.Screen name="History" component={HistoryScreen} options={{ title: "ประวัติการแจ้งเตือน" }} />
+            <Stack.Screen name="Analysis" component={AnalysisScreen} options={{ title: "วิเคราะห์ราคาแนะนำ" }} />
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "โปรไฟล์" }} />
           </>
         ) : (
-          <Stack.Screen name="Tabs" component={LoginScreen} options={{ headerShown: false }} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "สมัครสมาชิก" }} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -16,6 +16,7 @@ type AuthContextValue = {
   token: string | null;
   user: AuthUser | null;
   serverUrl: string;
+  setUser: (user: AuthUser | null) => void;
   login: (email: string, password: string, serverUrl: string) => Promise<void>;
   logout: () => Promise<void>;
   setServerUrl: (url: string) => Promise<void>;
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ready, token, user, serverUrl, login, logout, setServerUrl }),
+    () => ({ ready, token, user, setUser, serverUrl, login, logout, setServerUrl }),
     [ready, token, user, serverUrl, login, logout, setServerUrl],
   );
 

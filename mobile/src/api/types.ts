@@ -82,3 +82,63 @@ export type AlertActionResult = {
   failed?: number;
   reason?: string;
 };
+
+export type Paged<T> = { page: number; pageSize: number; total: number };
+
+export type AlertEventDetail = AlertEventRow & {
+  alertRule: { id: string; name: string } | null;
+};
+
+export type NotificationLogRow = {
+  id: string;
+  title: string;
+  body: string;
+  status: string; // SENT | FAILED
+  errorMessage: string | null;
+  sentAt: string;
+};
+
+export type AnalysisRow = {
+  id: string;
+  symbol: string;
+  kind: string; // ON_TRIGGER | SUGGEST_PRICE
+  priceAtAnalysis: number;
+  verdict: string | null; // BUY | WAIT | AVOID
+  suggestedEntryPrice: number | null;
+  suggestedStopPrice: number | null;
+  suggestedTargetPrice: number | null;
+  confidence: number | null;
+  horizonDays: number | null;
+  rationale: string | null;
+  createdAt: string;
+};
+
+export type AnalysisSettings = {
+  enabled: boolean;
+  suggestOnCreate: boolean;
+  analyzeOnTrigger: boolean;
+  lookbackMinutes: number;
+  minSamples: number;
+};
+
+export type SuggestPriceResult = {
+  analysis: AnalysisRow;
+};
+
+export type QuoteDetail = Quote & {
+  dayHigh?: number;
+  dayLow?: number;
+  previousClose?: number;
+};
+
+export type AssetDetail = {
+  asset: {
+    id: string;
+    symbol: string;
+    name: string;
+    exchange: string;
+    type: string;
+    currency: string;
+  };
+  quote: QuoteDetail | null;
+};
