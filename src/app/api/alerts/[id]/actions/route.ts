@@ -1,7 +1,7 @@
+import { requireUser, ensureUserRateLimit } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import type { AlertCondition, AlertType } from "@/types/enums";
 import { ok, toErrorResponse, notFound, badRequest } from "@/lib/api/response";
-import { requireUser, assertSameOrigin, ensureUserRateLimit } from "@/lib/api/handler";
 import { sendAlertNotification, buildAlertNotification } from "@/lib/notifications/send";
 import { getCachedQuote } from "@/lib/market-data";
 
@@ -11,7 +11,6 @@ import { getCachedQuote } from "@/lib/market-data";
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { id } = await params;
     ensureUserRateLimit(user.id, "alert-actions", 30, 60);

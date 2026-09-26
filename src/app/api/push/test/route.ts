@@ -1,12 +1,11 @@
+import { requireUser, ensureUserRateLimit } from "@/lib/api/handler";
 import { ok, toErrorResponse } from "@/lib/api/response";
-import { requireUser, assertSameOrigin, ensureUserRateLimit } from "@/lib/api/handler";
 import { sendTestNotification } from "@/lib/notifications/send";
 import { isPushConfigured } from "@/lib/push/web-push";
 import { fail } from "@/lib/api/response";
 
 export async function POST(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     ensureUserRateLimit(user.id, "push-test", 10, 3600);
 

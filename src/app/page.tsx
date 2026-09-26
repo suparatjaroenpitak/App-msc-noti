@@ -14,12 +14,7 @@ export default function HomePage() {
         <li>
           <code>GET /api/system/status</code> — สถานะระบบ (DB, push, แหล่งราคา)
         </li>
-        <li>
-          <code>POST /api/auth/token</code> — login/register สำหรับแอปมือถือ (Bearer token)
-        </li>
-        <li>
-          REST API ที่เหลือ (alerts, watchlist, assets, sounds, analysis, history) — ใช้ Bearer token จาก /api/auth/token
-        </li>
+        <li>REST API (alerts, watchlist, assets, sounds, analysis, history) — เรียกได้เลย ไม่ต้องยืนยันตัวตน (ผูกกับผู้ใช้เดียวของอินสแตนซ์)</li>
       </ul>
     </main>
   );

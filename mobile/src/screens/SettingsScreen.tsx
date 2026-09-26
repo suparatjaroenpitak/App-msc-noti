@@ -22,7 +22,7 @@ const PREFS: { key: keyof Preferences; label: string }[] = [
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
-  const { user, serverUrl, setServerUrl, logout } = useAuth();
+  const { serverUrl, setServerUrl, user } = useAuth();
   const status = useApi<SystemStatus>("/api/system/status");
   const prefs = useApi<{ preferences: Preferences }>("/api/notification-preferences");
   const [urlDraft, setUrlDraft] = useState(serverUrl);
@@ -34,8 +34,7 @@ export function SettingsScreen() {
     setSavingUrl(true);
     try {
       await setServerUrl(urlDraft);
-      Alert.alert("บันทึกแล้ว", "เปลี่ยนเซิร์ฟเวอร์แล้ว — กรุณาเข้าสู่ระบบใหม่");
-      await logout();
+      Alert.alert("บันทึกแล้ว", "เปลี่ยนเซิร์ฟเวอร์เรียบร้อย");
     } catch (err) {
       Alert.alert("บันทึกไม่สำเร็จ", errorMessage(err));
     } finally {
@@ -59,16 +58,9 @@ export function SettingsScreen() {
     }
   };
 
-  const confirmLogout = () => {
-    Alert.alert("ออกจากระบบ?", "ต้องเข้าสู่ระบบใหม่ในครั้งถัดไป", [
-      { text: "ยกเลิก", style: "cancel" },
-      { text: "ออกจากระบบ", style: "destructive", onPress: () => void logout() },
-    ]);
-  };
-
   return (
     <Screen refreshing={prefs.loading || status.loading} onRefresh={() => { prefs.reload(); status.reload(); }}>
-      <SectionTitle subtitle={user?.email}>{user?.name ?? "บัญชีของฉัน"}</SectionTitle>
+      <SectionTitle subtitle={serverUrl.replace(/^https?:\/\//, "")}>การเชื่อมต่อ</SectionTitle>
 
       <Card>
         <Text style={styles.label}>เซิร์ฟเวอร์ (API URL)</Text>
@@ -81,7 +73,7 @@ export function SettingsScreen() {
           disabled={urlDraft.trim() === serverUrl}
           onPress={() => void saveServerUrl()}
         />
-        <Muted>การเปลี่ยนเซิร์ฟเวอร์จะออกจากระบบอัตโนมัติ (token ผูกกับเซิร์ฟเวอร์เดิม)</Muted>
+        <Muted>ไม่มีระบบบัญชี — เปลี่ยนเซิร์ฟเวอร์ได้ทันที ข้อมูลอยู่ที่เซิร์ฟเวอร์ที่เชื่อมต่อ</Muted>
       </Card>
 
       <SectionTitle subtitle="ตั้งค่าเดียวกับเว็บ PWA">การแจ้งเตือน</SectionTitle>
@@ -105,6 +97,7 @@ export function SettingsScreen() {
           <Muted>โหลดการตั้งค่าไม่สำเร็จ</Muted>
         )}
         <ErrorBanner message={prefsError ?? prefs.error} />
+        <VolumeControl volume={prefs.data?.preferences.volume ?? null} onSaved={(v) => prefs.setData({ preferences: { ...prefs.data!.preferences, volume: v } })} />
         <Pressable onPress={() => navigation.navigate("Sounds")}>
           <Text style={styles.link}>🔊 จัดการเสียงแจ้งเตือน →</Text>
         </Pressable>
@@ -115,7 +108,7 @@ export function SettingsScreen() {
           <Text style={styles.link}>🤖 วิเคราะห์ราคาแนะนำ →</Text>
         </Pressable>
         <Pressable onPress={() => navigation.navigate("Profile")}>
-          <Text style={styles.link}>👤 โปรไฟล์ / เปลี่ยนรหัสผ่าน →</Text>
+          <Text style={styles.link}>🌐 ข้อมูลเซิร์ฟเวอร์ →</Text>
         </Pressable>
       </Card>
 
@@ -132,10 +125,9 @@ export function SettingsScreen() {
         </Muted>
       </Card>
 
-      <SectionTitle>บัญชี</SectionTitle>
+      <SectionTitle>เกี่ยวกับ</SectionTitle>
       <Card>
-        <Button title="ออกจากระบบ" variant="danger" onPress={confirmLogout} />
-        <Muted>Stock Alert Mobile v{APP_VERSION} · ใช้ API ชุดเดียวกับเว็บ PWA</Muted>
+        <Muted>Stock Alert Mobile v{APP_VERSION} · ไม่มีระบบล็อกอิน (auth removed)</Muted>
       </Card>
     </Screen>
   );
@@ -148,6 +140,44 @@ function StatusRow({ label, ok }: { label: string; ok: boolean | null }) {
       <Text style={{ color: ok === null ? colors.textFaint : ok ? colors.success : colors.warning, fontWeight: "700" }}>
         {ok === null ? "…" : ok ? "✅ ปกติ" : "⚠️ มีปัญหา"}
       </Text>
+    </View>
+  );
+}
+
+function VolumeControl({ volume, onSaved }: { volume: number | null; onSaved: (v: number) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (volume === null) return null;
+  const save = async (v: number) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api<{ preferences: Preferences }>("/api/notification-preferences", {
+        method: "PATCH",
+        body: { volume: v },
+      });
+      onSaved(res.preferences.volume);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const steps = 10;
+  const current = Math.round(volume * steps);
+  return (
+    <View style={{ marginTop: spacing.sm }}>
+      <Text style={styles.label}>ความดังเสียงแจ้งเตือน ({Math.round(volume * 100)}%){saving ? " · กำลังบันทึก…" : ""}</Text>
+      <View style={styles.volRow}>
+        {Array.from({ length: steps + 1 }, (_, i) => (
+          <Pressable
+            key={i}
+            onPress={() => void save(i / steps)}
+            style={[styles.volStep, i <= current && styles.volStepOn]}
+          />
+        ))}
+      </View>
+      <ErrorBanner message={error} />
     </View>
   );
 }
@@ -165,4 +195,7 @@ const styles = StyleSheet.create({
   switchLabel: { color: colors.text, fontSize: 13, flex: 1 },
   statusRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 },
   link: { color: colors.primary, fontWeight: "700", paddingVertical: spacing.sm },
+  volRow: { flexDirection: "row", gap: 4, marginTop: spacing.xs },
+  volStep: { flex: 1, height: 22, borderRadius: 4, backgroundColor: colors.border },
+  volStepOn: { backgroundColor: colors.primary },
 });

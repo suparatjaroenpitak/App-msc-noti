@@ -1,6 +1,6 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -27,7 +27,6 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const input = updateSchema.parse(await req.json());
 

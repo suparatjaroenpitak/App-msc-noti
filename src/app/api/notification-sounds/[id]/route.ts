@@ -1,6 +1,6 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, notFound } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 import { renameSoundSchema } from "@/lib/validation/schemas";
 import fs from "node:fs";
 import path from "node:path";
@@ -9,7 +9,6 @@ const SOUND_DIR = path.join(process.cwd(), "data", "sounds");
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { id } = await params;
 
@@ -26,7 +25,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { id } = await params;
 

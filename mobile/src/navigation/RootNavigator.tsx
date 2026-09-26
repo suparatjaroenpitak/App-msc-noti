@@ -3,7 +3,6 @@ import { Text } from "react-native";
 import { DarkTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { useAuth } from "../auth";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { WatchlistScreen } from "../screens/WatchlistScreen";
 import { AlertsScreen } from "../screens/AlertsScreen";
@@ -11,13 +10,12 @@ import { AlertFormScreen } from "../screens/AlertFormScreen";
 import { SoundsScreen } from "../screens/SoundsScreen";
 import { HistoryScreen } from "../screens/HistoryScreen";
 import { AnalysisScreen } from "../screens/AnalysisScreen";
-import { ProfileScreen } from "../screens/ProfileScreen";
-import { RegisterScreen } from "../screens/RegisterScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
-import { LoginScreen } from "../screens/LoginScreen";
+import { ProfileServerInfo } from "../screens/ProfileServerInfo";
 import { Spinner } from "../components/ui";
 import type { RootStackParamList, TabParamList } from "./types";
 import { colors } from "../theme";
+import { useConnection } from "../auth";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<TabParamList>();
@@ -66,7 +64,7 @@ function TabsNavigator() {
 }
 
 export function RootNavigator() {
-  const { ready, token } = useAuth();
+  const { ready } = useConnection();
 
   if (!ready) {
     return <Spinner label="กำลังเริ่มต้นแอป…" />;
@@ -83,26 +81,22 @@ export function RootNavigator() {
           contentStyle: { backgroundColor: colors.bg },
         }}
       >
-        {token ? (
-          <>
-            <Stack.Screen name="Tabs" component={TabsNavigator} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="AlertForm"
-              component={AlertFormScreen}
-              options={{ title: "Alert", presentation: "card" }}
-            />
-            <Stack.Screen name="Sounds" component={SoundsScreen} options={{ title: "เสียงแจ้งเตือน" }} />
-            <Stack.Screen name="History" component={HistoryScreen} options={{ title: "ประวัติการแจ้งเตือน" }} />
-            <Stack.Screen name="Analysis" component={AnalysisScreen} options={{ title: "วิเคราะห์ราคาแนะนำ" }} />
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "โปรไฟล์" }} />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "สมัครสมาชิก" }} />
-          </>
-        )}
+        <Stack.Screen name="Tabs" component={TabsNavigator} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="AlertForm"
+          component={AlertFormScreen}
+          options={{ title: "Alert", presentation: "card" }}
+        />
+        <Stack.Screen name="Sounds" component={SoundsScreen} options={{ title: "เสียงแจ้งเตือน" }} />
+        <Stack.Screen name="History" component={HistoryScreen} options={{ title: "ประวัติการแจ้งเตือน" }} />
+        <Stack.Screen name="Analysis" component={AnalysisScreen} options={{ title: "วิเคราะห์ราคาแนะนำ" }} />
+        <Stack.Screen name="Profile" component={ProfileScreenWrapper} options={{ title: "เซิร์ฟเวอร์" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
+}
+
+/** Connection info screen (account/password features removed). */
+function ProfileScreenWrapper() {
+  return <ProfileServerInfo />;
 }

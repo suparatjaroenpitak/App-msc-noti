@@ -1,6 +1,6 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, notFound } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 import { updateAlertSchema } from "@/lib/validation/schemas";
 
 async function getOwnedAlert(id: string, userId: string) {
@@ -22,7 +22,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { id } = await params;
     await getOwnedAlert(id, user.id);
@@ -57,7 +56,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { id } = await params;
     await getOwnedAlert(id, user.id);

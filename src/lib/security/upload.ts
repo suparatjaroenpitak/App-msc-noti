@@ -76,3 +76,8 @@ export async function validateSoundUpload(file: File): Promise<ValidatedSoundFil
 
   return { buffer, ext, mimeType: file.type || allowedMimes[0]!, sanitizedName };
 }
+
+/** Random storage key for uploaded sounds — never derived from user file names. */
+export function generateStorageKey(prefix = "snd"): string {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
+}

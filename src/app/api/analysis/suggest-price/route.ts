@@ -1,5 +1,5 @@
+import { requireUser, ensureUserRateLimit } from "@/lib/api/handler";
 import { ok, toErrorResponse, fail } from "@/lib/api/response";
-import { requireUser, assertSameOrigin, ensureUserRateLimit } from "@/lib/api/handler";
 import { suggestEntryPrice } from "@/lib/analysis/service";
 import { getCachedQuote } from "@/lib/market-data";
 import { z } from "zod";
@@ -10,7 +10,6 @@ const schema = z.object({
 
 export async function POST(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     ensureUserRateLimit(user.id, "analysis-suggest", 60, 3600); // cheap — 60/hour
 

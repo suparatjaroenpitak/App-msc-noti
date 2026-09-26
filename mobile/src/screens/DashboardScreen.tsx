@@ -23,7 +23,7 @@ function timeAgo(iso: string): string {
 }
 
 export function DashboardScreen() {
-  const { user, serverUrl } = useAuth();
+  const { user, serverUrl } = useAuth(); // connection info only (auth removed)
   const status = useApi<SystemStatus>("/api/system/status");
   const watchlist = useApi<{ items: WatchItem[] }>("/api/watchlist");
   const alerts = useApi<{ alerts: AlertRow[] }>("/api/alerts");
@@ -43,7 +43,7 @@ export function DashboardScreen() {
   return (
     <Screen refreshing={loading} onRefresh={refresh}>
       <View>
-        <Text style={styles.greeting}>สวัสดี {user?.name ?? ""}</Text>
+        <Text style={styles.greeting}>{serverUrl.replace(/^https?:\/\//, "")}</Text>
         <Text style={styles.serverUrl}>{serverUrl}</Text>
       </View>
 

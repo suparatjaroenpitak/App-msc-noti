@@ -4,7 +4,7 @@
 // if they do not already exist. Run with: npm run db:seed
 
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -99,14 +99,16 @@ async function main() {
   }
   console.log(`Seeded ${ASSETS.length} assets`);
 
+  // Single implicit user (auth removed) — must match DEFAULT_EMAIL in src/lib/api/handler.ts
   const demoEmail = "demo@example.com";
   const demo = await prisma.user.upsert({
     where: { email: demoEmail },
     update: {},
     create: {
-      name: "Demo User",
+      name: "ผู้ใช้ในเครื่อง",
       email: demoEmail,
-      passwordHash: await bcrypt.hash("demo1234", 12),
+      // Legacy schema-required column; auth is gone so store an unusable random value.
+      passwordHash: `disabled:${crypto.randomUUID()}`,
     },
   });
 
@@ -122,7 +124,7 @@ async function main() {
     create: { userId: demo.id },
   });
 
-  console.log(`Demo user ready: ${demoEmail} / demo1234`);
+  console.log(`Default user ready: ${demoEmail} (no password — auth removed)`);
 }
 
 main()

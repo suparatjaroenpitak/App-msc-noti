@@ -1,10 +1,9 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, notFound } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { id } = await params;
 

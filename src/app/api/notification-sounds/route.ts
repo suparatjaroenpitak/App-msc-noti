@@ -1,8 +1,8 @@
+import { requireUser, ensureUserRateLimit } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, fail } from "@/lib/api/response";
-import { requireUser, assertSameOrigin, ensureUserRateLimit } from "@/lib/api/handler";
 import { validateSoundUpload } from "@/lib/security/upload";
-import { generateStorageKey } from "@/lib/auth/password";
+import { generateStorageKey } from "@/lib/security/upload";
 import { env } from "@/lib/env";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,7 +26,6 @@ export async function GET(req: Request) {
 /** POST — multipart upload with strict validation. */
 export async function POST(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     ensureUserRateLimit(user.id, "sound-upload", 10, 3600);
 

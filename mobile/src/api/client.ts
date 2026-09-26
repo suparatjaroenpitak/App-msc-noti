@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_SERVER_URL } from "../config";
 
-const TOKEN_KEY = "stock_alert_token";
 const SERVER_KEY = "stock_alert_server_url";
 
 export class ApiError extends Error {
@@ -14,7 +13,6 @@ export class ApiError extends Error {
   }
 }
 
-let cachedToken: string | null = null;
 let cachedServer: string | null = null;
 
 export function normalizeServerUrl(url: string): string {
@@ -27,20 +25,11 @@ export function getServerUrl(): string {
   return cachedServer?.trim() ? cachedServer.replace(/\/+$/, "") : DEFAULT_SERVER_URL;
 }
 
+/** Restore the saved server URL (no auth state — authentication was removed). */
 export async function restoreSession(): Promise<{ token: string | null; serverUrl: string | null }> {
-  const [token, serverUrl] = await Promise.all([
-    AsyncStorage.getItem(TOKEN_KEY),
-    AsyncStorage.getItem(SERVER_KEY),
-  ]);
-  cachedToken = token;
+  const serverUrl = await AsyncStorage.getItem(SERVER_KEY);
   cachedServer = serverUrl;
-  return { token, serverUrl };
-}
-
-export async function persistToken(token: string | null): Promise<void> {
-  cachedToken = token;
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
+  return { token: null, serverUrl };
 }
 
 export async function persistServerUrl(url: string): Promise<void> {
@@ -51,7 +40,7 @@ export async function persistServerUrl(url: string): Promise<void> {
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string; details?: unknown } };
 
 export function authHeaders(): Record<string, string> {
-  return cachedToken ? { Authorization: `Bearer ${cachedToken}` } : {};
+  return {};
 }
 
 /** Fetch against the configured server, unwrapping the { ok, data } envelope. */
@@ -104,43 +93,4 @@ export async function api<T>(
     throw new ApiError(res.status, err?.code ?? "ERROR", message);
   }
   return json.data;
-}
-
-/** Register a new account from the mobile app and store the bearer token. */
-export async function registerRequest(
-  name: string,
-  email: string,
-  password: string,
-  serverUrl: string,
-): Promise<{ user: { id: string; name: string; email: string } }> {
-  const url = `${normalizeServerUrl(serverUrl)}/api/auth/token`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "register", name, email, password }),
-    });
-  } catch {
-    throw new ApiError(0, "NETWORK_ERROR", `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${normalizeServerUrl(serverUrl)})`);
-  }
-  const json = (await res.json().catch(() => null)) as Envelope<{
-    token: string;
-    user: { id: string; name: string; email: string };
-  }> | null;
-  if (!json || !json.ok) {
-    const err = json && !json.ok ? json.error : null;
-    throw new ApiError(res.status, err?.code ?? "ERROR", err?.message ?? `สมัครสมาชิกไม่สำเร็จ (${res.status})`);
-  }
-  await persistServerUrl(normalizeServerUrl(serverUrl));
-  await persistToken(json.data.token);
-  return { user: json.data.user };
-}
-
-/** Request a password-reset token (dev servers return devToken). */
-export async function forgotPasswordRequest(email: string): Promise<{ devToken?: string }> {
-  return api<{ message: string; devToken?: string }>("/api/auth/forgot-password", {
-    method: "POST",
-    body: { email },
-  });
 }

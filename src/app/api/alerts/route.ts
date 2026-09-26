@@ -1,6 +1,6 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, notFound, conflict } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 import { createAlertSchema } from "@/lib/validation/schemas";
 import { getCachedQuote } from "@/lib/market-data";
 
@@ -26,7 +26,6 @@ export async function GET(req: Request) {
 /** POST /api/alerts — create a new alert rule. */
 export async function POST(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const input = createAlertSchema.parse(await req.json());
 

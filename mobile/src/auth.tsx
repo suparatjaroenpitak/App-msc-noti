@@ -1,101 +1,76 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import {
-  ApiError,
-  api,
-  normalizeServerUrl,
-  persistServerUrl,
-  persistToken,
-  restoreSession,
-} from "./api/client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { api } from "./api/client";
 import { DEFAULT_SERVER_URL } from "./config";
 
-export type AuthUser = { id: string; name: string; email: string };
+/**
+ * Server connection context — authentication has been removed entirely.
+ * The app remembers only which server it talks to; every API call is unauthenticated.
+ */
 
-type AuthContextValue = {
+export type ServerUser = { id: string; name: string; email: string };
+
+type ConnectionContextValue = {
   ready: boolean;
-  token: string | null;
-  user: AuthUser | null;
   serverUrl: string;
-  setUser: (user: AuthUser | null) => void;
-  login: (email: string, password: string, serverUrl: string) => Promise<void>;
-  logout: () => Promise<void>;
   setServerUrl: (url: string) => Promise<void>;
+  /** Server-side default user info (best-effort; not used for access control). */
+  user: ServerUser | null;
+  setUser: (user: ServerUser | null) => void;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+const SERVER_KEY = "server.url";
 
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+const ConnectionContext = createContext<ConnectionContextValue | null>(null);
+
+export function useConnection(): ConnectionContextValue {
+  const ctx = useContext(ConnectionContext);
+  if (!ctx) throw new Error("useConnection must be used inside <ConnectionProvider>");
   return ctx;
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+/** Back-compat alias for screens that used `useAuth`. */
+export const useAuth = useConnection;
+
+function normalizeServerUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  if (!trimmed) return DEFAULT_SERVER_URL;
+  return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+export function ConnectionProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [serverUrl, setServerUrlState] = useState<string>(DEFAULT_SERVER_URL);
+  const [serverUrl, setServerUrlState] = useState(DEFAULT_SERVER_URL);
+  const [user, setUser] = useState<ServerUser | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const restored = await restoreSession();
-      if (cancelled) return;
-      setToken(restored.token);
-      setServerUrlState(restored.serverUrl ?? DEFAULT_SERVER_URL);
-      if (restored.token) {
-        try {
-          const data = await api<{ user: AuthUser }>("/api/auth/me");
-          if (!cancelled) setUser(data.user);
-        } catch (err) {
-          // Token invalid/expired → drop it and show the login screen.
-          if (err instanceof ApiError && err.status === 401) {
-            await persistToken(null);
-            if (!cancelled) setToken(null);
-          }
-        }
+      try {
+        const saved = await AsyncStorage.getItem(SERVER_KEY);
+        if (!cancelled && saved) setServerUrlState(normalizeServerUrl(saved));
+      } finally {
+        if (!cancelled) setReady(true);
       }
-      if (!cancelled) setReady(true);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string, rawServerUrl: string) => {
-    const url = normalizeServerUrl(rawServerUrl);
-    await persistServerUrl(url);
-    setServerUrlState(url);
-    const data = await api<{ token: string; user: AuthUser }>("/api/auth/token", {
-      method: "POST",
-      body: { email, password },
-    });
-    await persistToken(data.token);
-    setToken(data.token);
-    setUser(data.user);
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await api("/api/auth/token", { method: "DELETE" });
-    } catch {
-      // Server-side revoke is best effort; the local token is dropped regardless.
-    }
-    await persistToken(null);
-    setToken(null);
-    setUser(null);
-  }, []);
-
   const setServerUrl = useCallback(async (url: string) => {
     const normalized = normalizeServerUrl(url);
-    await persistServerUrl(normalized);
+    await AsyncStorage.setItem(SERVER_KEY, normalized);
     setServerUrlState(normalized);
   }, []);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({ ready, token, user, setUser, serverUrl, login, logout, setServerUrl }),
-    [ready, token, user, serverUrl, login, logout, setServerUrl],
+  const value = useMemo<ConnectionContextValue>(
+    () => ({ ready, serverUrl, setServerUrl, user, setUser }),
+    [ready, serverUrl, setServerUrl, user],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;
 }
+
+/** Back-compat export name. */
+export const AuthProvider = ConnectionProvider;

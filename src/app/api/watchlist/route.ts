@@ -1,6 +1,6 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse, notFound, conflict } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 import { addToWatchlistSchema } from "@/lib/validation/schemas";
 import { getCachedQuote } from "@/lib/market-data";
 
@@ -55,7 +55,6 @@ export async function GET(req: Request) {
 /** POST /api/watchlist — add an asset by symbol (creates the asset row if new). */
 export async function POST(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
     const { symbol } = addToWatchlistSchema.parse(await req.json());
 

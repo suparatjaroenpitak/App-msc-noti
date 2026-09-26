@@ -1,13 +1,12 @@
+import { requireUser } from "@/lib/api/handler";
 import { prisma } from "@/lib/db/prisma";
 import { ok, toErrorResponse } from "@/lib/api/response";
-import { requireUser, assertSameOrigin } from "@/lib/api/handler";
 import { subscribeSchema } from "@/lib/validation/schemas";
 import { isPushConfigured } from "@/lib/push/web-push";
 import { fail } from "@/lib/api/response";
 
 export async function POST(req: Request) {
   try {
-    assertSameOrigin(req);
     const user = await requireUser(req);
 
     if (!isPushConfigured()) {
