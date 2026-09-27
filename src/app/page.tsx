@@ -102,7 +102,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center">
         <p className="mb-4 inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-400">
-          🆕 เวอร์ชัน 2.2.0 — แจ้งเตือน 2 โหมด: ให้ระบบวิเคราะห์หาจังหวะราคาเข้าให้อัตโนมัติ หรือตั้งราคาเอง
+          🆕 เวอร์ชัน 2.2.1 — แจ้งเตือน 2 โหมด: ให้ระบบวิเคราะห์หาจังหวะราคาเข้าให้อัตโนมัติ หรือตั้งราคาเอง
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
           ติดตามหุ้น & ETF
@@ -136,7 +136,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-3 text-sm text-neutral-500">
-          เวอร์ชัน 2.2.0 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
+          เวอร์ชัน 2.2.1 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
         </p>
       </section>
 

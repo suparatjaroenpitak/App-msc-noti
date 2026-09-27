@@ -1,21 +1,25 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAudioPlayer, type AudioPlayer, type AudioStatus } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
+import { Directory, File, Paths } from "expo-file-system";
 
 /**
  * Local-only sound library — no server/API involved.
  *
  * - 4 built-in tones are generated as WAV data URIs (no bundled asset files needed).
- * - User imports audio files from the device with the document picker;
- *   small files are inlined as data URIs, larger ones are copied into the
- *   app's document directory and referenced by file:// URI.
- * - Everything persists in AsyncStorage; "activate" only changes local state.
+ * - User imports audio files from the device with the document picker; the file
+ *   is copied into the app's document directory (sounds/) and only its file://
+ *   URI is stored in AsyncStorage. Inlining audio as a data URI used to blow
+ *   past Android's 2 MB SQLite CursorWindow ("rows too big to fit cursorwindow").
+ * - Legacy entries that were inlined as data URIs are migrated to real files
+ *   automatically the first time the list is loaded.
+ * - Everything persists locally; "activate" only changes local state.
  */
 
 export type LocalSound = {
   id: string;
   name: string;
-  /** data: or file: URI playable by expo-audio. */
+  /** data: (built-ins) or file: URI playable by expo-audio. */
   uri: string;
   kind: "builtin" | "imported";
   /** Approximate size in bytes (0 for built-ins). */
@@ -29,6 +33,9 @@ const KEY_VOLUME = "local.volume";
 const KEY_MUTE = "local.muted";
 const KEY_LAST_EVENT = "local.lastEventId";
 const KEY_ALERT_SOUND = "local.alertSound";
+
+const SOUNDS_DIR_NAME = "sounds";
+const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
 /** Build a WAV file (16-bit PCM mono) and return a data: URI. */
 function makeWavDataUri(freqs: number[], secondsPerTone: number, sampleRate = 22050, volume = 0.6): string {
@@ -98,11 +105,88 @@ function newId(): string {
   return `snd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function soundsDirectory(): Directory {
+  const dir = new Directory(Paths.document, SOUNDS_DIR_NAME);
+  if (!dir.exists) dir.create();
+  return dir;
+}
+
+function extFromMime(mime: string | null | undefined): string {
+  const sub = (mime ?? "").split(";")[0]?.split("/")[1] ?? "";
+  const ext = sub.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 8);
+  return ext || "bin";
+}
+
+function resolveExt(name: string | null | undefined, mime: string | null | undefined): string {
+  const fromName = name?.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1]?.toLowerCase();
+  return fromName ?? extFromMime(mime);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function removeFileQuietly(uri: string): void {
+  if (!uri.startsWith("file://")) return;
+  try {
+    new File(uri).delete();
+  } catch {
+    // already gone — nothing to do
+  }
+}
+
+/**
+ * One-time-per-load housekeeping for imported sounds:
+ * 1. Move legacy data:-URI entries into real files (they can exceed the 2 MB
+ *    SQLite CursorWindow on Android and make AsyncStorage unreadable).
+ * 2. Drop entries whose backing file disappeared (cache cleared, etc.).
+ */
+async function migrateImported(imported: LocalSound[]): Promise<LocalSound[]> {
+  let changed = false;
+  const out: LocalSound[] = [];
+  let dir: Directory | null = null;
+  for (const s of imported) {
+    if (s.kind !== "imported") {
+      out.push(s);
+      continue;
+    }
+    if (s.uri.startsWith("data:")) {
+      const m = /^data:[^;,]*;base64,([\s\S]+)$/.exec(s.uri);
+      if (m?.[1]) {
+        try {
+          dir = dir ?? soundsDirectory();
+          const mime = /^data:([^;,]+)/.exec(s.uri)?.[1];
+          const file = new File(dir, `${s.id}.${extFromMime(mime)}`);
+          file.write(base64ToBytes(m[1]));
+          out.push({ ...s, uri: file.uri });
+          changed = true;
+          continue;
+        } catch {
+          // migration failed — keep the entry as-is rather than losing the sound
+        }
+      }
+      out.push(s);
+      continue;
+    }
+    if (s.uri.startsWith("file://") && !new File(s.uri).exists) {
+      changed = true; // dead entry — drop it
+      continue;
+    }
+    out.push(s);
+  }
+  if (changed) await AsyncStorage.setItem(KEY_SOUNDS, JSON.stringify(out));
+  return out;
+}
+
 export async function listSounds(): Promise<LocalSound[]> {
   ensureBuiltins();
   const raw = await AsyncStorage.getItem(KEY_SOUNDS);
   const imported: LocalSound[] = raw ? (JSON.parse(raw) as LocalSound[]) : [];
-  return [...BUILTINS, ...imported];
+  const migrated = await migrateImported(imported);
+  return [...BUILTINS, ...migrated];
 }
 
 function saveImported(sounds: LocalSound[]): Promise<void> {
@@ -113,27 +197,40 @@ export async function importSound(): Promise<LocalSound | null> {
   const pick = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
   if (pick.canceled || !pick.assets?.length) return null;
   const asset = pick.assets[0]!;
-  const name = (asset.name ?? "เสียงของฉัน").replace(/\.[^.]+$/, "").slice(0, 60) || "เสียงของฉัน";
+  const name = (asset.name ?? "เสียงของฉัน").replace(/\.[^.]+$/, "").trim().slice(0, 60) || "เสียงของฉัน";
 
-  const res = await fetch(asset.uri);
-  const blob = await res.blob();
-  if (blob.size > 10 * 1024 * 1024) {
-    throw new Error("ไฟล์ใหญ่เกิน 10 MB");
+  const size = asset.size ?? 0;
+  if (size > MAX_IMPORT_BYTES) {
+    throw new Error(`ไฟล์ใหญ่เกิน ${Math.round(MAX_IMPORT_BYTES / (1024 * 1024))} MB`);
   }
-  // Inline as data URI — keeps everything self-contained and survives re-installs of caches.
-  const dataUri = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
-    reader.readAsDataURL(blob);
-  });
+
+  // Copy into the app's document directory and store only the file:// URI in
+  // AsyncStorage — never inline audio bytes into SQLite.
+  const id = newId();
+  const dest = new File(soundsDirectory(), `${id}.${resolveExt(asset.name, asset.mimeType)}`);
+  let storedSize = size;
+  if (asset.uri.startsWith("file://")) {
+    const src = new File(asset.uri);
+    if (!src.exists) throw new Error("อ่านไฟล์ที่เลือกไม่สำเร็จ");
+    await src.copy(dest, { overwrite: true });
+  } else {
+    // content:// (or another non-file scheme) — read through fetch and write bytes.
+    const res = await fetch(asset.uri);
+    if (!res.ok) throw new Error("อ่านไฟล์ที่เลือกไม่สำเร็จ");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > MAX_IMPORT_BYTES) {
+      throw new Error(`ไฟล์ใหญ่เกิน ${Math.round(MAX_IMPORT_BYTES / (1024 * 1024))} MB`);
+    }
+    dest.write(bytes);
+    storedSize = bytes.byteLength;
+  }
 
   const sound: LocalSound = {
-    id: newId(),
+    id,
     name,
-    uri: dataUri,
+    uri: dest.uri,
     kind: "imported",
-    size: blob.size,
+    size: storedSize,
     duration: null,
   };
   const raw = await AsyncStorage.getItem(KEY_SOUNDS);
@@ -155,8 +252,10 @@ export async function renameSound(id: string, name: string): Promise<void> {
 export async function deleteSound(id: string): Promise<void> {
   const raw = await AsyncStorage.getItem(KEY_SOUNDS);
   const imported: LocalSound[] = raw ? (JSON.parse(raw) as LocalSound[]) : [];
+  const target = imported.find((s) => s.id === id);
   const next = imported.filter((s) => s.id !== id);
   await saveImported(next);
+  if (target) removeFileQuietly(target.uri);
   if ((await getDefaultSoundId()) === id) {
     await AsyncStorage.removeItem(KEY_DEFAULT);
   }
@@ -205,19 +304,36 @@ export async function setMuted(muted: boolean): Promise<void> {
 
 let playerRef: AudioPlayer | null = null;
 
-/** Preview (play/stop) a sound by id; resolves when playback finishes or stops. */
-export async function previewSound(sound: LocalSound, currentlyPlayingId: string | null): Promise<string | null> {
+/** Preview (play/stop) a sound by id; onFinished fires when playback ends or is stopped. */
+export async function previewSound(
+  sound: LocalSound,
+  currentlyPlayingId: string | null,
+  onFinished?: () => void,
+): Promise<string | null> {
   if (currentlyPlayingId === sound.id) {
     stopPreview();
+    onFinished?.();
     return null;
   }
   stopPreview();
   const player = createAudioPlayer({ uri: sound.uri });
   try {
     const vol = await getVolume();
-    player.volume = await isMuted() ? 0 : vol;
-    player.play();
+    player.volume = (await isMuted()) ? 0 : vol;
     playerRef = player;
+    player.addListener("playbackStatusUpdate", (status: AudioStatus) => {
+      if (status.didJustFinish) {
+        try {
+          player.pause();
+          player.remove();
+        } catch {
+          // ignore
+        }
+        if (playerRef === player) playerRef = null;
+        onFinished?.();
+      }
+    });
+    player.play();
     return sound.id;
   } catch (err) {
     try {
@@ -277,5 +393,8 @@ export async function shouldAnnounceEvent(eventId: string): Promise<boolean> {
 
 /** Remove all imported sounds (built-ins stay). */
 export async function resetImportedSounds(): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEY_SOUNDS);
+  const imported: LocalSound[] = raw ? (JSON.parse(raw) as LocalSound[]) : [];
+  for (const s of imported) removeFileQuietly(s.uri);
   await AsyncStorage.removeItem(KEY_SOUNDS);
 }
