@@ -23,6 +23,8 @@ export type AssetSearchResult = {
   currency: string;
 };
 
+export type AlertMode = "AUTO" | "MANUAL";
+
 export type AlertRow = {
   id: string;
   name: string;
@@ -36,6 +38,10 @@ export type AlertRow = {
   notificationMessage?: string | null;
   soundId?: string | null;
   sound?: { name: string } | null;
+  /** AUTO = ระบบวิเคราะห์แจ้งราคาเข้าเอง · MANUAL = ผู้ใช้ตั้งราคาเอง */
+  mode?: AlertMode;
+  /** โหมด AUTO: id ของ Alert ราคาเข้าที่ระบบสร้างให้ (null = ยังรอสัญญาณ) */
+  analysisAlertId?: string | null;
   asset: { symbol: string; name: string };
 };
 

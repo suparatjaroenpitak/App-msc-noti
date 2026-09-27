@@ -57,8 +57,8 @@ const FEATURES = [
   },
   {
     icon: "🔔",
-    title: "แจ้งเตือนตามเงื่อนไข",
-    text: "สร้าง Alert ได้ไม่จำกัด — ราคาขึ้นถึง/ลงถึงเป้าหมาย, แบบครั้งเดียว, ตั้ง cooldown กันเตือนรัว",
+    title: "แจ้งเตือน 2 โหมด",
+    text: "🤖 โหมดอัตโนมัติ — ระบบวิเคราะห์แล้วแจ้ง “จังหวะราคาเข้า” เอง ไม่ต้องตั้งราคา · 🎯 โหมดตั้งราคาเอง — เตือนเมื่อราคาถึงจุดที่ตั้งไว้",
   },
   {
     icon: "🔊",
@@ -102,15 +102,15 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center">
         <p className="mb-4 inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-400">
-          🆕 เวอร์ชัน 2.1.0 — ราคาจริงจาก Yahoo Finance · แจ้งเตือนทันที
+          🆕 เวอร์ชัน 2.2.0 — แจ้งเตือน 2 โหมด: ให้ระบบวิเคราะห์หาจังหวะราคาเข้าให้อัตโนมัติ หรือตั้งราคาเอง
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
           ติดตามหุ้น & ETF
-          <span className="text-emerald-400"> แจ้งเตือนทันทีที่ราคาถึงเป้า</span>
+          <span className="text-emerald-400"> แจ้งเตือนทันทีที่มีจังหวะราคาเข้า</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-neutral-400">
-          แอปมือถือดึงราคาจริงจาก Yahoo Finance พร้อมแจ้งเตือนทันที — ไม่ต้องสมัครสมาชิก ไม่มีบัญชี
-          ข้อมูลทั้งหมดเก็บในเครื่อง ดาวน์โหลดติดตั้งแล้วใช้ได้เลย
+          เลือกได้ 2 โหมด: ให้ระบบวิเคราะห์ (SMA · RSI · โมเมนตัม) แล้วแจ้ง “จังหวะราคาเข้า” ให้เอง — ไม่ต้องตั้งราคา
+          หรือตั้งราคาเป้าหมายเองแบบเดิม · ไม่ต้องสมัครสมาชิก ข้อมูลเก็บในเครื่อง ดาวน์โหลดติดตั้งแล้วใช้ได้เลย
         </p>
 
         {/* Download buttons */}
@@ -136,7 +136,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-3 text-sm text-neutral-500">
-          เวอร์ชัน 2.1.0 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
+          เวอร์ชัน 2.2.0 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
         </p>
       </section>
 

@@ -21,6 +21,8 @@ export type WatchRow = {
   sortOrder: number;
 };
 
+export type AlertMode = "AUTO" | "MANUAL";
+
 export type AlertRuleRow = {
   id: string;
   assetId: string;
@@ -34,6 +36,10 @@ export type AlertRuleRow = {
   notificationMessage: string | null;
   soundId: string | null;
   lastTriggeredAt: string | null;
+  /** AUTO = ระบบวิเคราะห์แล้วแจ้งราคาเข้าเอง · MANUAL = ผู้ใช้ตั้งราคาเอง */
+  mode: AlertMode;
+  /** โหมด AUTO: id ของ Alert ราคาเข้าที่ระบบสร้างให้แล้ว (null = ยังรอโอกาส) */
+  analysisAlertId: string | null;
 };
 
 export type AlertEventRow = {
@@ -141,6 +147,8 @@ export function initDb(): void {
       cooldown_minutes INTEGER NOT NULL DEFAULT 60,
       notification_message TEXT,
       sound_id TEXT,
+      alert_mode TEXT NOT NULL DEFAULT 'MANUAL',
+      analysis_alert_id TEXT,
       last_triggered_at TEXT,
       created_at TEXT NOT NULL
     );
@@ -228,7 +236,21 @@ export function initDb(): void {
     db.runSync("INSERT INTO notification_preferences (id) VALUES (1)");
   }
 
+  migrateAlertRules(db);
+
   seedAssets();
+}
+
+/** Migration: add AUTO-mode columns to alert_rules for databases created before v2.2.0. */
+function migrateAlertRules(db: SQLite.SQLiteDatabase): void {
+  const cols = db.getAllSync<{ name: string }>("PRAGMA table_info(alert_rules)");
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has("alert_mode")) {
+    db.runSync("ALTER TABLE alert_rules ADD COLUMN alert_mode TEXT NOT NULL DEFAULT 'MANUAL'");
+  }
+  if (!names.has("analysis_alert_id")) {
+    db.runSync("ALTER TABLE alert_rules ADD COLUMN analysis_alert_id TEXT");
+  }
 }
 
 const UNIVERSE: Array<{ symbol: string; name: string; exchange: string; type: "STOCK" | "ETF" }> = [

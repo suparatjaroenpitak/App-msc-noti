@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stock Alert",
     "slug": "stock-alert-mobile",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.stockalert.mobile",
-      "buildNumber": "4",
+      "buildNumber": "8",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -33,7 +33,7 @@
     },
     "android": {
       "package": "com.stockalert.mobile",
-      "versionCode": 4,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#0f1117",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -56,11 +56,11 @@
       "expo-document-picker",
       "expo-sqlite"
     ],
+    "owner": "asdrt009s-team",
     "extra": {
       "eas": {
-        "projectId": "20cb7f2d-7804-4aa7-8c3f-b3afa20e260f"
+        "projectId": "94de9b07-eeb7-43a0-9940-2c1746f1e43f"
       }
-    },
-    "owner": "asdrt009"
+    }
   }
 }

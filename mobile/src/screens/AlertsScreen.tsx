@@ -101,6 +101,7 @@ export function AlertsScreen() {
               >
                 <View style={styles.rowInline}>
                   <Text style={styles.symbol}>{alert.asset.symbol}</Text>
+                  {alert.mode === "AUTO" ? <Badge text="🤖 อัตโนมัติ" tone="blue" /> : null}
                   <Badge
                     text={alert.type}
                     tone={alert.type === "ENTRY" ? "green" : alert.type === "EXIT" ? "red" : "gray"}
@@ -110,10 +111,17 @@ export function AlertsScreen() {
                 <Text style={styles.name} numberOfLines={1}>
                   {alert.name}
                 </Text>
-                <Text style={styles.muted}>
-                  ราคา {alert.condition === "ABOVE_OR_EQUAL" ? "≥" : "≤"} ${Number(alert.targetPrice).toFixed(2)} ·
-                  cooldown {alert.cooldownMinutes} นาที{alert.sound ? ` · 🔊 ${alert.sound.name}` : ""}
-                </Text>
+                {alert.mode === "AUTO" ? (
+                  <Text style={styles.muted}>
+                    ระบบวิเคราะห์แล้วแจ้ง "จังหวะราคาเข้า" เอง (SMA · RSI · โมเมนตัม)
+                    {alert.analysisAlertId ? " · ✅ ได้ราคาเข้าแล้ว — ดู Alert ที่สร้างให้" : " · กำลังเฝ้าดูสัญญาณ…"}
+                  </Text>
+                ) : (
+                  <Text style={styles.muted}>
+                    ราคา {alert.condition === "ABOVE_OR_EQUAL" ? "≥" : "≤"} ${Number(alert.targetPrice).toFixed(2)} ·
+                    cooldown {alert.cooldownMinutes} นาที{alert.sound ? ` · 🔊 ${alert.sound.name}` : ""}
+                  </Text>
+                )}
               </Pressable>
               <View style={styles.actions}>
                 <Pressable onPress={() => void sendTest(alert)} hitSlop={8} disabled={busyId === alert.id}>

@@ -86,6 +86,154 @@ function conditionMet(condition: string, price: number, target: number): boolean
   return price <= target; // BELOW_OR_EQUAL
 }
 
+// ---------- AUTO mode engine (2-mode alerts) ----------
+//
+// "AUTO"  = ไม่ต้องตั้งราคาเข้า — ระบบวิเคราะห์ builtin-v1 เฝ้าดูหุ้น แล้วแจ้งเตือน
+//           "ราคาเข้า" ทันทีที่สัญญาณบอกว่าเป็นจังหวะเข้า (BUY) พร้อมจุดเข้า/stop/target
+// "MANUAL" = ผู้ใช้ตั้งราคาเป้าหมายเอง แล้วเตือนเมื่อราคาถึงราคาที่ตั้ง (พฤติกรรมเดิม)
+
+/** ครั้งต่อนาทีของการพิจารณา AUTO rules ต่อ symbol (ประหยัด battery + กันสแปม) */
+const AUTO_ANALYSIS_INTERVAL_MS = 60_000;
+const AUTO_ENTRY_LOOKBACK_MINUTES = 720; // ใช้ข้อมูลสะสมย้อนหลังสูงสุด 12 ชม. ตอนวิเคราะห์
+
+/**
+ * เฝ้าดู AUTO-mode rules ทุก poll cycle: วิเคราะห์ builtin-v1 (จำกัด 1 ครั้ง/นาที/symbol)
+ * ถ้าผลออกมาเป็น BUY → แจ้งเตือน "จังหวะราคาเข้า" ทันที (พร้อม entry/stop/target)
+ * แล้วปิด rule (oneTime) เพื่อไม่เตือนซ้ำจนกว่าผู้ใช้จะเปิดใหม่
+ */
+function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_name: string; asset_type: string }>, now: number): number {
+  const autoRules = rules.filter((r) => r.mode === "AUTO" && r.enabled);
+  if (autoRules.length === 0) return 0;
+
+  const db = getDb();
+  const kvKey = "auto-analysis.lastRun";
+  const lastRunBySymbol = new Map<string, number>();
+  try {
+    const raw = kvGet(kvKey);
+    if (raw) {
+      for (const [sym, ts] of Object.entries(JSON.parse(raw) as Record<string, number>)) {
+        lastRunBySymbol.set(sym, ts);
+  }
+    }
+  } catch {
+    // corrupted state — start fresh
+  }
+
+  let triggered = 0;
+  const touched: Record<string, number> = {};
+  for (const [sym, ts] of lastRunBySymbol) touched[sym] = ts;
+
+  const processedSymbols = new Set<string>();
+  for (const rule of autoRules) {
+    if (processedSymbols.has(rule.symbol)) continue;
+    processedSymbols.add(rule.symbol);
+
+    const lastRun = lastRunBySymbol.get(rule.symbol) ?? 0;
+    if (now - lastRun < AUTO_ANALYSIS_INTERVAL_MS) continue; // จำกัด 1 ครั้ง/นาที/symbol
+    touched[rule.symbol] = now;
+
+    const quote = quoteForSync(rule.symbol);
+    if (!quote) continue; // ยังไม่มีราคาจริงสด — รอรอบหน้า
+
+    const settings = getAnalysisSettings();
+    const recentPrices = fetchRecentPrices(rule.assetId, Math.max(settings.lookbackMinutes, AUTO_ENTRY_LOOKBACK_MINUTES));
+
+    const input: EngineInput = {
+      symbol: rule.symbol,
+      assetName: rule.asset_name,
+      assetType: rule.asset_type as EngineInput["assetType"],
+      currentPrice: quote.price,
+      currency: "USD",
+      recentPrices,
+      dayHigh: quote.dayHigh,
+      dayLow: quote.dayLow,
+      previousClose: quote.previousClose,
+    };
+
+    const result = analyze(input);
+
+    // ---- เกณฑ์แจ้งเตือน "ราคาเข้า" ----
+    // สัญญาณชัด (BUY) → เตือนทันที · WAIT/AVOID → ไม่เตือน รอรอบถัดไป
+    const verdictOk = result.verdict === "BUY";
+    const samples = result.indicators.samples;
+    const enoughData = samples >= 12;
+    if (!verdictOk || !enoughData) continue;
+
+    const entry = result.suggestedEntryPrice;
+    const stop = result.suggestedStopPrice;
+    const target = result.suggestedTargetPrice;
+    const nowIso = new Date().toISOString();
+
+    // ---- สร้าง "Alert ราคาเข้า" ให้ผู้ใช้ (MANUAL rule จริง เปิดตลอด) ----
+    // ถ้าเคยสร้างไว้แล้ว (สัญญาณ BUY รอบก่อน) ให้แทนที่ด้วยจุดเข้าใหม่
+    if (rule.analysisAlertId) {
+      db.runSync("DELETE FROM alert_rules WHERE id = ?", [rule.analysisAlertId]);
+    }
+    const entryAlertId = uid("alr");
+    db.runSync(
+      `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, ?)`,
+      [
+        entryAlertId,
+        rule.assetId,
+        `ราคาเข้า ${rule.symbol} (อัตโนมัติ)`,
+        "ENTRY",
+        "BELOW_OR_EQUAL",
+        entry,
+        45,
+        `ราคาเข้าแนะนำจากผลวิเคราะห์ — ${result.rationale}`,
+        nowIso,
+      ],
+    );
+    db.runSync("UPDATE alert_rules SET analysis_alert_id = ? WHERE id = ?", [entryAlertId, rule.id]);
+
+    // ---- บันทึกผลวิเคราะห์ (SUGGEST_PRICE) + เหตุการณ์ + log แจ้งเตือน ----
+    persistAnalysis({
+      assetId: rule.assetId,
+      alertEventId: null,
+      symbol: rule.symbol,
+      kind: "SUGGEST_PRICE",
+      price: quote.price,
+      result,
+    });
+
+    const eventId = uid("evt");
+    db.runSync(
+      "INSERT INTO alert_events (id, alert_rule_id, symbol, current_price, target_price, triggered_at, status, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        eventId,
+        rule.id,
+        rule.symbol,
+        quote.price,
+        entry,
+        nowIso,
+        "TRIGGERED",
+        JSON.stringify({ mode: "AUTO", type: rule.type, priceAtTrigger: quote.price, entry, stop, target }),
+      ],
+    );
+    void playForAlert(rule.id);
+    recordNotification(
+      eventId,
+      `📊 ${rule.symbol} มีจังหวะราคาเข้า — $${entry.toFixed(2)}`,
+      `ผลวิเคราะห์อัตโนมัติ: ราคาปัจจุบัน $${quote.price.toFixed(2)} · จุดเข้า $${entry.toFixed(2)} · ตัดขาดทุน $${(stop ?? 0).toFixed(2)} · เป้าหมาย $${(target ?? 0).toFixed(2)}\nสร้าง Alert ราคาเข้าให้แล้ว (เปิดอยู่ในหน้า Alerts)\nไม่ใช่คำแนะนำการลงทุน`,
+      "SENT",
+    );
+
+    // oneTime → ปิด AUTO rule หลังแจ้งเตือนครั้งแรก (ค่าเริ่มต้น: เตือนจังหวะเดียวพอ)
+    if (rule.oneTime) {
+      db.runSync("UPDATE alert_rules SET enabled = 0 WHERE id = ?", [rule.id]);
+    }
+    triggered += 1;
+  }
+
+  try {
+    kvSet(kvKey, JSON.stringify(touched));
+  } catch {
+    // ignore kv write failures
+  }
+  return triggered;
+}
+
 function recordNotification(alertEventId: string | null, title: string, body: string, status: "SENT" | "FAILED", errorMessage?: string): void {
   getDb().runSync(
     "INSERT INTO notification_logs (id, alert_event_id, title, body, status, error_message, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -104,7 +252,16 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
   if (!options?.force && !isMarketOpen()) return { evaluated: 0, triggered: 0 };
 
   const rules = db.getAllSync<Record<string, unknown>>(
-    `SELECT r.*, a.symbol, a.name AS asset_name, a.type AS asset_type
+    `SELECT r.*,
+      r.asset_id AS assetId,
+      r.target_price AS targetPrice,
+      r.cooldown_minutes AS cooldownMinutes,
+      r.one_time AS oneTime,
+      r.notification_message AS notificationMessage,
+      r.last_triggered_at AS lastTriggeredAt,
+      r.alert_mode AS mode,
+      r.analysis_alert_id AS analysisAlertId,
+      a.symbol, a.name AS asset_name, a.type AS asset_type
      FROM alert_rules r JOIN assets a ON a.id = r.asset_id
      WHERE r.enabled = 1`,
   ) as unknown as Array<AlertRuleRow & { symbol: string; asset_name: string; asset_type: string }>;
@@ -119,6 +276,9 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
   let triggered = 0;
   const now = Date.now();
 
+  // โหมด AUTO: วิเคราะห์อัตโนมัติ → แจ้ง "ราคาเข้า" จากผลวิเคราะห์ (ไม่ตั้งราคาเอง)
+  triggered += runAutoModeChecks(rules, now);
+
   for (const rule of rules) {
     let quote: StockQuote | null;
     try {
@@ -127,7 +287,8 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
     } catch {
       continue;
     }
-    // Persist a sample for the analysis engine (dedupe per minute).
+    // Persist a sample for the analysis engine (dedupe per minute) —
+    // เก็บทุก rule รวมถึงโหมด AUTO (เอนจินวิเคราะห์ต้องใช้ข้อมูลสะสม)
     const minuteBucket = new Date(Math.floor(now / 60_000) * 60_000).toISOString();
     const sampleId = `${rule.assetId}:${minuteBucket}`;
     const hasSample = db.getFirstSync("SELECT 1 FROM price_samples WHERE id = ?", [sampleId]);
@@ -296,6 +457,40 @@ function suggestEntryPrice(symbol: string, quote: StockQuote): { ok: true; resul
   const result = analyze(engineInput);
   persistAnalysis({ assetId: asset.id, alertEventId: null, symbol: asset.symbol, kind: "SUGGEST_PRICE", price: quote.price, result });
   return { ok: true, result };
+}
+
+/**
+ * ผลวิเคราะห์ล่วงหน้าสำหรับหน้าฟอร์ม (ไม่บันทึกลง DB)
+ * ใช้แสดง "ราคาเข้าแนะนำ" ที่ระบบจะแจ้งเตือน ก่อนผู้ใช้กดสร้างโหมด AUTO
+ */
+export async function runSuggestEntryOnDemand(
+  symbol: string,
+): Promise<{ ok: true; result: ReturnType<typeof analyze> } | { ok: false; error: string }> {
+  ensureBackend();
+  const upper = symbol.toUpperCase();
+  const asset = findAssetBySymbol(upper) ?? ensureAsset(upper);
+  try {
+    const quote = await quoteForAsync(upper);
+    const settings = getAnalysisSettings();
+    const recentPrices = fetchRecentPrices(
+      asset.id,
+      Math.max(settings.lookbackMinutes, AUTO_ENTRY_LOOKBACK_MINUTES),
+    );
+    const result = analyze({
+      symbol: asset.symbol,
+      assetName: asset.name,
+      assetType: asset.type,
+      currentPrice: quote.price,
+      currency: "USD",
+      recentPrices,
+      dayHigh: quote.dayHigh,
+      dayLow: quote.dayLow,
+      previousClose: quote.previousClose,
+    });
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "วิเคราะห์ไม่สำเร็จ" };
+  }
 }
 
 // ---------- router ----------
@@ -500,6 +695,8 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
       notificationMessage: (row.notification_message as string | null) ?? null,
       soundId: (row.sound_id as string | null) ?? null,
       sound: null,
+      mode: (String(row.alert_mode ?? "MANUAL") === "AUTO" ? "AUTO" : "MANUAL") as "AUTO" | "MANUAL",
+      analysisAlertId: (row.analysis_alert_id as string | null) ?? null,
       asset: { symbol: String(row.symbol), name: String(row.asset_name) },
     }));
     return ok({ alerts } as unknown as T);
@@ -510,22 +707,39 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
     const assetId = String(b.assetId ?? "");
     const assetRow = db.getFirstSync<Record<string, string>>("SELECT * FROM assets WHERE id = ?", [assetId]);
     if (!assetRow) return fail(400, "BAD_REQUEST", "ไม่พบหุ้นที่เลือก");
+
+    // 2 โหมด: AUTO (ไม่ตั้งราคา — ระบบวิเคราะห์แจ้งจังหวะเข้าเอง) / MANUAL (ตั้งราคาเอง)
+    const mode: "AUTO" | "MANUAL" = b.mode === "AUTO" ? "AUTO" : "MANUAL";
+    const targetPrice = mode === "AUTO" ? 0 : Number(b.targetPrice);
+    if (!Number.isFinite(targetPrice) || targetPrice < 0) {
+      return fail(400, "BAD_REQUEST", "ราคาเป้าหมายไม่ถูกต้อง");
+    }
+    if (mode === "MANUAL" && targetPrice <= 0) {
+      return fail(400, "BAD_REQUEST", "ตั้งราคาเป้าหมายก่อน (หรือเลือกโหมดอัตโนมัติ)");
+    }
+    const condition =
+      mode === "AUTO"
+        ? "BELOW_OR_EQUAL" // ไม่ใช้ตรวจจริง (AUTO engine เป็นคนตัดสิน) — เก็บไว้ให้ schema สมบูรณ์
+        : String(b.condition ?? "ABOVE_OR_EQUAL") === "BELOW_OR_EQUAL"
+          ? "BELOW_OR_EQUAL"
+          : "ABOVE_OR_EQUAL";
+
     const id = uid("alr");
     db.runSync(
-      `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
       [
         id,
         assetId,
         String(b.name ?? "Alert"),
-        String(b.type ?? "CUSTOM"),
-        String(b.condition ?? "ABOVE_OR_EQUAL"),
-        Number(b.targetPrice),
+        String(b.type ?? "ENTRY"),
+        condition,
+        targetPrice,
         b.enabled === false ? 0 : 1,
         b.oneTime ? 1 : 0,
         Number(b.cooldownMinutes ?? 60),
         (b.notificationMessage as string | null) ?? null,
-        null, // soundId is a device-local override now
+        mode,
         new Date().toISOString(),
       ],
     );
@@ -555,6 +769,8 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
         lastTriggeredAt: null,
         notificationMessage: (alertRow.notification_message as string | null) ?? null,
         soundId: null,
+        mode: (String(alertRow.alert_mode ?? "MANUAL") === "AUTO" ? "AUTO" : "MANUAL") as "AUTO" | "MANUAL",
+        analysisAlertId: (alertRow.analysis_alert_id as string | null) ?? null,
         asset: { symbol: String(assetRow.symbol), name: String(assetRow.name) },
       },
     } as unknown as T);
@@ -578,6 +794,7 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
         oneTime: "one_time",
         cooldownMinutes: "cooldown_minutes",
         notificationMessage: "notification_message",
+        mode: "alert_mode",
       };
       for (const [key, col] of Object.entries(fieldMap)) {
         if (key in (b ?? {})) {
