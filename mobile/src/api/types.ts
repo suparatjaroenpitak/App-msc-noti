@@ -42,6 +42,8 @@ export type AlertRow = {
   mode?: AlertMode;
   /** โหมด AUTO: id ของ Alert ราคาเข้าที่ระบบสร้างให้ (null = ยังรอสัญญาณ) */
   analysisAlertId?: string | null;
+  /** โหมด AUTO: id ของ Alert จุดขาย (ขาออก) ที่ระบบสร้างคู่ให้ (null = ยังไม่มี) */
+  exitAlertId?: string | null;
   asset: { symbol: string; name: string };
 };
 

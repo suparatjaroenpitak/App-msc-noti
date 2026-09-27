@@ -3,8 +3,8 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 const FILES: Record<string, { type: string; filename: string }> = {
-  "StockAlert-release.apk": { type: "application/vnd.android.package-archive", filename: "StockAlert-v2.2.2.apk" },
-  "StockAlert-release.ipa": { type: "application/octet-stream", filename: "StockAlert-v2.2.2.ipa" },
+  "StockAlert-release.apk": { type: "application/vnd.android.package-archive", filename: "StockAlert-v2.2.3.apk" },
+  "StockAlert-release.ipa": { type: "application/octet-stream", filename: "StockAlert-v2.2.3.ipa" },
 };
 const DOWNLOADS_DIR = path.join(process.cwd(), "public", "downloads");
 

@@ -149,8 +149,16 @@ export function AlertsScreen() {
                 </Text>
                 {alert.mode === "AUTO" ? (
                   <Text style={styles.muted}>
-                    ระบบวิเคราะห์แล้วแจ้ง "จังหวะราคาเข้า" เอง (SMA · RSI · โมเมนตัม)
-                    {alert.analysisAlertId ? " · ✅ ได้ราคาเข้าแล้ว — ดู Alert ที่สร้างให้" : " · กำลังเฝ้าดูสัญญาณ…"}
+                    {alert.type === "EXIT"
+                      ? "ระบบเฝ้าดูสัญญาณอ่อนแรงแล้วแจ้ง “จังหวะราคาออก” เอง (SMA · RSI · โมเมนตัม)"
+                      : "ระบบวิเคราะห์แล้วแจ้ง “จังหวะราคาเข้า” เอง (SMA · RSI · โมเมนตัม)"}
+                    {alert.type === "EXIT"
+                      ? alert.exitAlertId
+                        ? " · ✅ ได้จุดขายแล้ว — ดู Alert จุดขายที่สร้างให้"
+                        : " · กำลังเฝ้าดูสัญญาณ…"
+                      : alert.analysisAlertId
+                        ? " · ✅ ได้ราคาเข้า + จุดขายคู่กันแล้ว — ดู Alert ที่สร้างให้"
+                        : " · กำลังเฝ้าดูสัญญาณ…"}
                     {soundLabelFor(alert)}
                   </Text>
                 ) : (

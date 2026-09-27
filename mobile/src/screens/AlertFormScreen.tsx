@@ -33,7 +33,7 @@ const CONDITIONS: { value: AlertCondition; label: string }[] = [
 ];
 
 const MODES: { value: AlertMode; label: string; desc: string }[] = [
-  { value: "AUTO", label: "🤖 อัตโนมัติ", desc: "ไม่ต้องตั้งราคา — ระบบวิเคราะห์แล้วแจ้ง \"จังหวะราคาเข้า\" ให้เอง พร้อมสร้าง Alert ราคาเข้าให้อัตโนมัติ" },
+  { value: "AUTO", label: "🤖 อัตโนมัติ", desc: "ไม่ต้องตั้งราคา — เลือกสัญญาณขาเข้าหรือขาออก แล้วให้ระบบวิเคราะห์หาจังหวะให้เอง พร้อมสร้าง Alert ราคาจริงให้อัตโนมัติ" },
   { value: "MANUAL", label: "🎯 ตั้งราคาเอง", desc: "เลือกราคาเป้าหมายเอง แล้วแจ้งเตือนทันทีที่ราคาถึงจุดที่ตั้งไว้" },
 ];
 
@@ -326,7 +326,8 @@ export function AlertFormScreen() {
             <View style={styles.autoNote}>
               <Text style={styles.autoNoteText}>
                 🤖 ระบบจะวิเคราะห์ราคาให้เอง (SMA · RSI · โมเมนตัม · ความผันผวน) แล้วแจ้งเตือน
-                “จังหวะราคาเข้า” พร้อมสร้าง Alert ราคาเข้าให้อัตโนมัติ — ไม่ต้องกรอกราคา
+                {type === "EXIT" ? "“จังหวะราคาออก” พร้อมจุดขายที่เอนจินแนะนำ" : "“จังหวะราคาเข้า” พร้อมสร้าง Alert ราคาเข้าและจุดขายคู่กัน"}
+                — ไม่ต้องกรอกราคา
               </Text>
             </View>
 
@@ -367,7 +368,7 @@ export function AlertFormScreen() {
         <Text style={styles.label}>ชื่อ Alert</Text>
         <Input value={name} onChangeText={setName} placeholder="เช่น QQQM ซื้อกระทบยอด" />
 
-        <Text style={styles.label}>ประเภท</Text>
+        <Text style={styles.label}>{mode === "AUTO" ? "ประเภทสัญญาณ" : "ประเภท"}</Text>
         <View style={styles.optionRow}>
           {TYPES.map((option) => (
             <Pressable
@@ -379,6 +380,13 @@ export function AlertFormScreen() {
             </Pressable>
           ))}
         </View>
+        {mode === "AUTO" ? (
+          <Text style={styles.autoTypeHint}>
+            {type === "EXIT"
+              ? "📉 ระบบจะเฝ้าดูสัญญาณอ่อนแรง/overbought แล้วแจ้ง \"จังหวะราคาออก\" พร้อมสร้าง Alert จุดขายที่เอนจินแนะนำ"
+              : "📈 ระบบจะเฝ้าดูสัญญาณซื้อ แล้วแจ้ง \"จังหวะราคาเข้า\" พร้อมสร้าง Alert ราคาเข้าและจุดขายคู่กันที่ราคาเป้าที่เอนจินแนะนำ (เช่น เข้า 200 → จุดขาย 250)"}
+          </Text>
+        ) : null}
 
         {mode === "MANUAL" ? (
           <>
@@ -413,7 +421,9 @@ export function AlertFormScreen() {
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>
             {mode === "AUTO"
-              ? "One-time (หยุดเฝ้าดูหลังแจ้งจังหวะเข้าครั้งแรก)"
+              ? type === "EXIT"
+                ? "One-time (หยุดเฝ้าดูหลังแจ้งจังหวะออกครั้งแรก)"
+                : "One-time (หยุดเฝ้าดูหลังแจ้งจังหวะเข้าครั้งแรก)"
               : "One-time (ปิด Alert หลังแจ้งเตือนครั้งแรก)"}
           </Text>
           <Switch
@@ -521,6 +531,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   autoNoteText: { color: colors.text, fontSize: 12, lineHeight: 17 },
+  autoTypeHint: { color: colors.textMuted, fontSize: 11, lineHeight: 15, marginTop: spacing.xs },
   suggestCard: {
     borderWidth: 1,
     borderColor: colors.border,

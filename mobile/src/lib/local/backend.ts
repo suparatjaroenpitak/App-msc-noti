@@ -152,40 +152,67 @@ function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_n
 
     const result = analyze(input);
 
-    // ---- เกณฑ์แจ้งเตือน "ราคาเข้า" ----
-    // สัญญาณชัด (BUY) → เตือนทันที · WAIT/AVOID → ไม่เตือน รอรอบถัดไป
-    const verdictOk = result.verdict === "BUY";
+    // ---- เกณฑ์แจ้งเตือนของโหมด AUTO ----
+    // · ประเภทขาเข้า (ENTRY): สัญญาณชัด (BUY) → แจ้ง "จังหวะราคาเข้า" พร้อมจุดขายคู่กัน
+    // · ประเภทขาออก (EXIT): สัญญาณอ่อนแรง/overbought (AVOID) → แจ้ง "จังหวะราคาออก" พร้อมจุดขายที่เอนจินแนะนำ
+    // WAIT หรือข้อมูลสะสมไม่พอ → ไม่เตือน รอรอบถัดไป
     const samples = result.indicators.samples;
     const enoughData = samples >= 12;
-    if (!verdictOk || !enoughData) continue;
+    const isExitSignal = rule.type === "EXIT";
+    const wantedVerdict = isExitSignal ? "AVOID" : "BUY";
+    if (result.verdict !== wantedVerdict || !enoughData) continue;
 
     const entry = result.suggestedEntryPrice;
     const stop = result.suggestedStopPrice;
     const target = result.suggestedTargetPrice;
+    const signalPrice = isExitSignal ? (target ?? quote.price) : entry;
     const nowIso = new Date().toISOString();
 
-    // ---- สร้าง "Alert ราคาเข้า" ให้ผู้ใช้ (MANUAL rule จริง เปิดตลอด) ----
-    // ถ้าเคยสร้างไว้แล้ว (สัญญาณ BUY รอบก่อน) ให้แทนที่ด้วยจุดเข้าใหม่
-    if (rule.analysisAlertId) {
-      db.runSync("DELETE FROM alert_rules WHERE id = ?", [rule.analysisAlertId]);
+    // ---- สร้าง "Alert จุดขาย (ขาออก)" ที่ราคาที่เอนจินแนะนำ ----
+    // เตือนเมื่อราคาขึ้นไปถึงจุดขาย (ABOVE_OR_EQUAL) — ใช้ทั้งกรณี "เข้าแล้วมีจุดออกคู่กัน"
+    // และกรณีผู้ใช้ตั้ง alert ขาออกโดยตรง · ถ้าเคยสร้างไว้ แทนที่ด้วยจุดขายใหม่
+    const upsertExitAlert = (exitPrice: number, rationale: string): string => {
+      if (rule.exitAlertId) {
+        db.runSync("DELETE FROM alert_rules WHERE id = ?", [rule.exitAlertId]);
+      }
+      const exitAlertId = uid("alr");
+      db.runSync(
+        `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, created_at)
+         VALUES (?, ?, ?, 'EXIT', 'ABOVE_OR_EQUAL', ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, ?)`,
+        [exitAlertId, rule.assetId, `จุดขาย ${rule.symbol} (อัตโนมัติ)`, exitPrice, 45, rationale, nowIso],
+      );
+      db.runSync("UPDATE alert_rules SET exit_alert_id = ? WHERE id = ?", [exitAlertId, rule.id]);
+      return exitAlertId;
+    };
+
+    if (isExitSignal) {
+      upsertExitAlert(signalPrice, `จุดขายแนะนำจากผลวิเคราะห์ — ${result.rationale}`);
+    } else {
+      // ---- ขาเข้า: สร้าง "Alert ราคาเข้า" + จุดขายคู่กันที่ราคาเป้าที่เอนจินแนะนำ ----
+      if (rule.analysisAlertId) {
+        db.runSync("DELETE FROM alert_rules WHERE id = ?", [rule.analysisAlertId]);
+      }
+      const entryAlertId = uid("alr");
+      db.runSync(
+        `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, ?)`,
+        [
+          entryAlertId,
+          rule.assetId,
+          `ราคาเข้า ${rule.symbol} (อัตโนมัติ)`,
+          "ENTRY",
+          "BELOW_OR_EQUAL",
+          entry,
+          45,
+          `ราคาเข้าแนะนำจากผลวิเคราะห์ — ${result.rationale}`,
+          nowIso,
+        ],
+      );
+      db.runSync("UPDATE alert_rules SET analysis_alert_id = ? WHERE id = ?", [entryAlertId, rule.id]);
+      if (target != null && target > entry) {
+        upsertExitAlert(target, `จุดขายคู่กับราคาเข้า (เป้าที่เอนจินแนะนำ) — ${result.rationale}`);
+      }
     }
-    const entryAlertId = uid("alr");
-    db.runSync(
-      `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, ?)`,
-      [
-        entryAlertId,
-        rule.assetId,
-        `ราคาเข้า ${rule.symbol} (อัตโนมัติ)`,
-        "ENTRY",
-        "BELOW_OR_EQUAL",
-        entry,
-        45,
-        `ราคาเข้าแนะนำจากผลวิเคราะห์ — ${result.rationale}`,
-        nowIso,
-      ],
-    );
-    db.runSync("UPDATE alert_rules SET analysis_alert_id = ? WHERE id = ?", [entryAlertId, rule.id]);
 
     // ---- บันทึกผลวิเคราะห์ (SUGGEST_PRICE) + เหตุการณ์ + log แจ้งเตือน ----
     persistAnalysis({
@@ -205,19 +232,20 @@ function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_n
         rule.id,
         rule.symbol,
         quote.price,
-        entry,
+        signalPrice,
         nowIso,
         "TRIGGERED",
         JSON.stringify({ mode: "AUTO", type: rule.type, priceAtTrigger: quote.price, entry, stop, target }),
       ],
     );
     void playForAlert(rule.id);
-    recordNotification(
-      eventId,
-      `📊 ${rule.symbol} มีจังหวะราคาเข้า — $${entry.toFixed(2)}`,
-      `ผลวิเคราะห์อัตโนมัติ: ราคาปัจจุบัน $${quote.price.toFixed(2)} · จุดเข้า $${entry.toFixed(2)} · ตัดขาดทุน $${(stop ?? 0).toFixed(2)} · เป้าหมาย $${(target ?? 0).toFixed(2)}\nสร้าง Alert ราคาเข้าให้แล้ว (เปิดอยู่ในหน้า Alerts)\nไม่ใช่คำแนะนำการลงทุน`,
-      "SENT",
-    );
+    const signalTitle = isExitSignal
+      ? `📉 ${rule.symbol} มีจังหวะราคาออก — จุดขาย $${signalPrice.toFixed(2)}`
+      : `📊 ${rule.symbol} มีจังหวะราคาเข้า — $${entry.toFixed(2)}`;
+    const signalBody = isExitSignal
+      ? `ผลวิเคราะห์อัตโนมัติ: ราคาปัจจุบัน $${quote.price.toFixed(2)} · จุดขายที่แนะนำ $${signalPrice.toFixed(2)}\nสร้าง Alert จุดขายให้แล้ว (เปิดอยู่ในหน้า Alerts)\nไม่ใช่คำแนะนำการลงทุน`
+      : `ผลวิเคราะห์อัตโนมัติ: ราคาปัจจุบัน $${quote.price.toFixed(2)} · จุดเข้า $${entry.toFixed(2)} · ตัดขาดทุน $${(stop ?? 0).toFixed(2)} · เป้าหมาย $${(target ?? 0).toFixed(2)}\nสร้าง Alert ราคาเข้าและจุดขายให้แล้ว (เปิดอยู่ในหน้า Alerts)\nไม่ใช่คำแนะนำการลงทุน`;
+    recordNotification(eventId, signalTitle, signalBody, "SENT");
 
     // oneTime → ปิด AUTO rule หลังแจ้งเตือนครั้งแรก (ค่าเริ่มต้น: เตือนจังหวะเดียวพอ)
     if (rule.oneTime) {
@@ -261,6 +289,7 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
       r.last_triggered_at AS lastTriggeredAt,
       r.alert_mode AS mode,
       r.analysis_alert_id AS analysisAlertId,
+      r.exit_alert_id AS exitAlertId,
       a.symbol, a.name AS asset_name, a.type AS asset_type
      FROM alert_rules r JOIN assets a ON a.id = r.asset_id
      WHERE r.enabled = 1`,
@@ -697,6 +726,7 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
       sound: null,
       mode: (String(row.alert_mode ?? "MANUAL") === "AUTO" ? "AUTO" : "MANUAL") as "AUTO" | "MANUAL",
       analysisAlertId: (row.analysis_alert_id as string | null) ?? null,
+      exitAlertId: (row.exit_alert_id as string | null) ?? null,
       asset: { symbol: String(row.symbol), name: String(row.asset_name) },
     }));
     return ok({ alerts } as unknown as T);
@@ -804,6 +834,7 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
           sound: null,
           mode: (String(row.alert_mode ?? "MANUAL") === "AUTO" ? "AUTO" : "MANUAL") as "AUTO" | "MANUAL",
           analysisAlertId: (row.analysis_alert_id as string | null) ?? null,
+          exitAlertId: (row.exit_alert_id as string | null) ?? null,
           asset: { symbol: String(row.symbol), name: String(row.asset_name) },
         },
       } as unknown as T);
