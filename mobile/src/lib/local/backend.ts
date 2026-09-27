@@ -781,6 +781,34 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
     const existing = db.getFirstSync<Record<string, unknown>>("SELECT * FROM alert_rules WHERE id = ?", [id]);
     if (!existing) return fail(404, "NOT_FOUND", "ไม่พบ Alert นี้");
 
+    if (m === "GET") {
+      // Edit mode ของ AlertFormScreen โหลดข้อมูลเดิมจาก route นี้ — ต้องมี asset แนบมาด้วย
+      const row = db.getFirstSync<Record<string, unknown>>(
+        "SELECT r.*, a.symbol, a.name AS asset_name FROM alert_rules r JOIN assets a ON a.id = r.asset_id WHERE r.id = ?",
+        [id],
+      );
+      if (!row) return fail(404, "NOT_FOUND", "ไม่พบ Alert นี้");
+      return ok({
+        alert: {
+          id: String(row.id),
+          name: String(row.name),
+          type: String(row.type),
+          condition: String(row.condition),
+          targetPrice: Number(row.target_price),
+          enabled: Boolean(row.enabled),
+          oneTime: Boolean(row.one_time),
+          cooldownMinutes: Number(row.cooldown_minutes),
+          lastTriggeredAt: isoOrNull(row.last_triggered_at as string | null),
+          notificationMessage: (row.notification_message as string | null) ?? null,
+          soundId: (row.sound_id as string | null) ?? null,
+          sound: null,
+          mode: (String(row.alert_mode ?? "MANUAL") === "AUTO" ? "AUTO" : "MANUAL") as "AUTO" | "MANUAL",
+          analysisAlertId: (row.analysis_alert_id as string | null) ?? null,
+          asset: { symbol: String(row.symbol), name: String(row.asset_name) },
+        },
+      } as unknown as T);
+    }
+
     if (m === "PATCH") {
       const b = body as Record<string, unknown>;
       const sets: string[] = [];
@@ -840,9 +868,9 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
       );
       return ok({ alert: { id: newId } } as unknown as T);
     } else if (action === "test") {
-      // Device-local test: play the alert sound + write a notification log.
+      // Device-local test: play THIS alert's chosen sound (fallback: default) + write a notification log.
       // There are no push devices in offline mode — "sent" counts the local playback.
-      void playForAlert();
+      void playForAlert(id);
       recordNotification(null, "ทดสอบการแจ้งเตือน", "นี่คือการแจ้งเตือนทดสอบ (เล่นเสียงในเครื่อง) — โหมด offline ไม่มี push", "SENT");
       return ok({ sent: 1, failed: 0, tested: true } as unknown as T);
     }

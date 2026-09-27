@@ -1,9 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../auth";
-import { useEffect, useRef } from "react";
 import { useApi } from "../hooks/useApi";
-import { playForAlert } from "../lib/local-sounds";
 import { Badge, Card, EmptyState, ErrorBanner, Muted, Screen, SectionTitle, Spinner } from "../components/ui";
 import type { AlertEventRow, AlertRow, SystemStatus, WatchItem } from "../api/types";
 import { colors, radius, spacing } from "../theme";
@@ -34,23 +32,9 @@ export function DashboardScreen() {
   const error = status.error || watchlist.error || alerts.error || events.error;
   const activeAlerts = alerts.data?.alerts.filter((a) => a.enabled).length ?? 0;
 
-  // Play the locally-selected sound whenever a NEW triggered event shows up (device-only).
-  // AlertEventRow has no alertRule.id; look up the rule via the alerts list when possible.
-  const seenEventRef = useRef<string | null>(null);
-  const firstEventsLoadRef = useRef(true);
-  useEffect(() => {
-    const latest = events.data?.events?.[0];
-    if (!latest) return;
-    const prev = seenEventRef.current;
-    seenEventRef.current = latest.id;
-    if (firstEventsLoadRef.current) {
-      firstEventsLoadRef.current = false;
-      return; // don't blast sound on app open
-    }
-    if (prev !== null && prev !== latest.id && latest.status === "TRIGGERED") {
-      void playForAlert();
-    }
-  }, [events.data]);
+  // NOTE: sound playback happens once inside the local poll engine (with the
+  // alert's own selected sound). Don't play again here — a second layer here
+  // used to double-play, with the default sound overtaking the chosen one.
 
   const refresh = () => {
     status.reload();

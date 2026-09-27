@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../api/client";
 import { useApi, errorMessage } from "../hooks/useApi";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Screen, SectionTitle, Spinner } from "../components/ui";
+import { getAlertSoundId, listSounds } from "../lib/local-sounds";
 import type { AlertActionResult, AlertRow } from "../api/types";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, spacing } from "../theme";
@@ -15,8 +16,43 @@ export function AlertsScreen() {
   const navigation = useNavigation<Nav>();
   const { data, error, loading, reload } = useApi<{ alerts: AlertRow[] }>("/api/alerts");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [soundNames, setSoundNames] = useState<Record<string, string>>({});
+  const [deviceSoundIds, setDeviceSoundIds] = useState<Record<string, string | null>>({});
 
   const alerts = data?.alerts ?? [];
+
+  // Local per-alert sound overrides + library names (device-only, no API).
+  useEffect(() => {
+    let cancelled = false;
+    listSounds()
+      .then((list) => {
+        if (!cancelled) setSoundNames(Object.fromEntries(list.map((s) => [s.id, s.name])));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const alertIdsKey = alerts.map((a) => a.id).join(",");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = alertIdsKey ? alertIdsKey.split(",") : [];
+      const entries = await Promise.all(
+        ids.map(async (id) => [id, (await getAlertSoundId(id)) ?? null] as const),
+      );
+      if (!cancelled) setDeviceSoundIds(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [alertIdsKey]);
+
+  const soundLabelFor = (alert: AlertRow): string => {
+    const sid = deviceSoundIds[alert.id] ?? alert.soundId ?? null;
+    return sid && soundNames[sid] ? ` · 🔊 ${soundNames[sid]}` : "";
+  };
 
   const runAction = async (id: string, action: "enable" | "disable" | "duplicate" | "test") => {
     setBusyId(id);
@@ -115,11 +151,12 @@ export function AlertsScreen() {
                   <Text style={styles.muted}>
                     ระบบวิเคราะห์แล้วแจ้ง "จังหวะราคาเข้า" เอง (SMA · RSI · โมเมนตัม)
                     {alert.analysisAlertId ? " · ✅ ได้ราคาเข้าแล้ว — ดู Alert ที่สร้างให้" : " · กำลังเฝ้าดูสัญญาณ…"}
+                    {soundLabelFor(alert)}
                   </Text>
                 ) : (
                   <Text style={styles.muted}>
                     ราคา {alert.condition === "ABOVE_OR_EQUAL" ? "≥" : "≤"} ${Number(alert.targetPrice).toFixed(2)} ·
-                    cooldown {alert.cooldownMinutes} นาที{alert.sound ? ` · 🔊 ${alert.sound.name}` : ""}
+                    cooldown {alert.cooldownMinutes} นาที{soundLabelFor(alert)}
                   </Text>
                 )}
               </Pressable>
