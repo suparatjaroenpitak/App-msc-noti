@@ -14,7 +14,15 @@ import {
   Spinner,
 } from "../components/ui";
 import type { AlertMode, AlertRow, AssetSearchResult } from "../api/types";
-import { getAlertSoundId, listSounds, saveAlertSoundId, type LocalSound } from "../lib/local-sounds";
+import {
+  getAlertSoundId,
+  getSignalSoundId,
+  listSounds,
+  saveAlertSoundId,
+  setSignalSoundId,
+  type LocalSound,
+  type SignalKind,
+} from "../lib/local-sounds";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, radius, spacing } from "../theme";
 
@@ -84,6 +92,9 @@ export function AlertFormScreen() {
   const [notificationMessage, setNotificationMessage] = useState("");
   const [alertSoundId, setAlertSoundId] = useState<string | null | undefined>(undefined);
   const [sounds, setSounds] = useState<LocalSound[]>([]);
+  // โหมดอัตโนมัติ: เสียงแยกตามสัญญาณ (จังหวะขาเข้า / ขาออก)
+  const [entrySoundId, setEntrySoundId] = useState<string | null>(null);
+  const [exitSoundId, setExitSoundId] = useState<string | null>(null);
 
   // AUTO preview — ผลวิเคราะห์ล่าสุดของหุ้นที่เลือก (แสดงราคาเข้าที่ระบบจะแจ้งเตือน)
   const [suggest, setSuggest] = useState<SuggestEntryResult["suggestion"] | null>(null);
@@ -116,6 +127,10 @@ export function AlertFormScreen() {
         if (!cancelled) setSounds(soundList);
       } catch {
         // sound library is optional
+      }
+      if (!cancelled) {
+        setEntrySoundId(await getSignalSoundId("ENTRY"));
+        setExitSoundId(await getSignalSoundId("EXIT"));
       }
       if (alertId) {
         try {
@@ -199,6 +214,17 @@ export function AlertFormScreen() {
     if (next === "AUTO" && assetSymbol) void loadSuggestion(assetSymbol);
   };
 
+  // เลือกเสียงของสัญญาณอัตโนมัติ — บันทึกทันที (ไม่รอ submit)
+  const pickSignalSound = async (kind: SignalKind, soundId: string | null) => {
+    if (kind === "ENTRY") setEntrySoundId(soundId);
+    else setExitSoundId(soundId);
+    try {
+      await setSignalSoundId(kind, soundId);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
   const submit = async () => {
     setError(null);
     if (!alertId && !assetId) {
@@ -238,14 +264,14 @@ export function AlertFormScreen() {
 
       if (alertId) {
         await api(`/api/alerts/${alertId}`, { method: "PATCH", body: payload });
-        // Remember the chosen sound locally for this alert (not sent to the server).
-        await saveAlertSoundId(alertId, alertSoundId ?? null);
+        // Per-alert sound (MANUAL mode only — AUTO mode uses per-signal sounds saved on pick).
+        if (mode === "MANUAL") await saveAlertSoundId(alertId, alertSoundId ?? null);
       } else {
         const created = await api<{ alert: AlertRow }>("/api/alerts", {
           method: "POST",
           body: { ...payload, assetId, enabled: true },
         });
-        await saveAlertSoundId(created.alert.id, alertSoundId ?? null);
+        if (mode === "MANUAL") await saveAlertSoundId(created.alert.id, alertSoundId ?? null);
       }
       navigation.goBack();
     } catch (err) {
@@ -443,30 +469,72 @@ export function AlertFormScreen() {
         />
 
         <Text style={styles.label}>เสียงแจ้งเตือน (เก็บในเครื่องนี้ — เล่นเมื่อแอปเปิดอยู่)</Text>
-        <View style={styles.optionRow}>
-          <Pressable
-            onPress={() => setAlertSoundId(null)}
-            style={[styles.option, (alertSoundId ?? null) === null && styles.optionActive]}
-          >
-            <Text style={[styles.optionText, (alertSoundId ?? null) === null && styles.optionTextActive]}>
-              ค่าเริ่มต้นของเครื่อง
+        {mode === "AUTO" ? (
+          <>
+            {(["ENTRY", "EXIT"] as const).map((kind) => {
+              const kindLabel = kind === "ENTRY" ? "📈 จังหวะขาเข้า" : "📉 จังหวะขาออก";
+              const selected = kind === "ENTRY" ? entrySoundId : exitSoundId;
+              const chosenName = selected
+                ? sounds.find((s) => s.id === selected)?.name ?? "เสียงที่เลือก"
+                : "ค่าเริ่มต้นของเครื่อง";
+              return (
+                <View key={kind} style={styles.signalSoundBlock}>
+                  <View style={styles.signalSoundHeader}>
+                    <Text style={styles.signalSoundTitle}>{kindLabel}</Text>
+                    <Text style={styles.signalSoundChosen}>เลือกไว้: {chosenName}</Text>
+                  </View>
+                  <View style={styles.optionRow}>
+                    <Pressable
+                      onPress={() => void pickSignalSound(kind, null)}
+                      style={[styles.option, selected === null && styles.optionActive]}
+                    >
+                      <Text style={[styles.optionText, selected === null && styles.optionTextActive]}>ค่าเริ่มต้น</Text>
+                    </Pressable>
+                    {sounds.map((sound) => (
+                      <Pressable
+                        key={kind + sound.id}
+                        onPress={() => void pickSignalSound(kind, sound.id)}
+                        style={[styles.option, selected === sound.id && styles.optionActive]}
+                      >
+                        <Text style={[styles.optionText, selected === sound.id && styles.optionTextActive]} numberOfLines={1}>
+                          {sound.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
+            <Text style={styles.autoTypeHint}>
+              เสียงของโหมดอัตโนมัติบันทึกทันทีที่เลือก — แจ้งจังหวะเข้าใช้เสียงขาเข้า แจ้งจังหวะออกใช้เสียงขาออก (ใช้กับทุกหุ้น)
             </Text>
-          </Pressable>
-          {sounds.map((sound) => (
+          </>
+        ) : (
+          <View style={styles.optionRow}>
             <Pressable
-              key={sound.id}
-              onPress={() => setAlertSoundId(sound.id)}
-              style={[styles.option, alertSoundId === sound.id && styles.optionActive]}
+              onPress={() => setAlertSoundId(null)}
+              style={[styles.option, (alertSoundId ?? null) === null && styles.optionActive]}
             >
-              <Text
-                style={[styles.optionText, alertSoundId === sound.id && styles.optionTextActive]}
-                numberOfLines={1}
-              >
-                {sound.name}
+              <Text style={[styles.optionText, (alertSoundId ?? null) === null && styles.optionTextActive]}>
+                ค่าเริ่มต้นของเครื่อง
               </Text>
             </Pressable>
-          ))}
-        </View>
+            {sounds.map((sound) => (
+              <Pressable
+                key={sound.id}
+                onPress={() => setAlertSoundId(sound.id)}
+                style={[styles.option, alertSoundId === sound.id && styles.optionActive]}
+              >
+                <Text
+                  style={[styles.optionText, alertSoundId === sound.id && styles.optionTextActive]}
+                  numberOfLines={1}
+                >
+                  {sound.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </Card>
 
       <Button
@@ -532,6 +600,17 @@ const styles = StyleSheet.create({
   },
   autoNoteText: { color: colors.text, fontSize: 12, lineHeight: 17 },
   autoTypeHint: { color: colors.textMuted, fontSize: 11, lineHeight: 15, marginTop: spacing.xs },
+  signalSoundBlock: {
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  signalSoundHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  signalSoundTitle: { color: colors.text, fontWeight: "700", fontSize: 13 },
+  signalSoundChosen: { color: colors.textMuted, fontSize: 11 },
   suggestCard: {
     borderWidth: 1,
     borderColor: colors.border,

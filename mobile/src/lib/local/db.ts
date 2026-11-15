@@ -42,6 +42,8 @@ export type AlertRuleRow = {
   analysisAlertId: string | null;
   /** โหมด AUTO: id ของ Alert จุดขาย (ขาออก) ที่ระบบสร้างคู่ให้ (null = ยังไม่มี) */
   exitAlertId: string | null;
+  /** Alert ที่เอนจินสร้างให้อัตโนมัติ: ชนิดสัญญาณที่มาจาก (ENTRY = จุดเข้า, EXIT = จุดขาย) */
+  autoSignal: "ENTRY" | "EXIT" | null;
 };
 
 export type AlertEventRow = {
@@ -152,6 +154,7 @@ export function initDb(): void {
       alert_mode TEXT NOT NULL DEFAULT 'MANUAL',
       analysis_alert_id TEXT,
       exit_alert_id TEXT,
+      auto_signal TEXT,
       last_triggered_at TEXT,
       created_at TEXT NOT NULL
     );
@@ -256,6 +259,9 @@ function migrateAlertRules(db: SQLite.SQLiteDatabase): void {
   }
   if (!names.has("exit_alert_id")) {
     db.runSync("ALTER TABLE alert_rules ADD COLUMN exit_alert_id TEXT");
+  }
+  if (!names.has("auto_signal")) {
+    db.runSync("ALTER TABLE alert_rules ADD COLUMN auto_signal TEXT");
   }
 }
 

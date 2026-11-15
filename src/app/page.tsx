@@ -63,7 +63,7 @@ const FEATURES = [
   {
     icon: "🔊",
     title: "เสียงแจ้งเตือนของคุณเอง",
-    text: "มี 4 เสียงในตัว หรือนำเข้าไฟล์เสียงจากเครื่อง (mp3/wav/m4a) — เก็บในเครื่อง ไม่อัปโหลดขึ้นเซิร์ฟเวอร์",
+    text: "4 เสียงในตัว หรือนำเข้าไฟล์เสียงเอง (mp3/wav/m4a) — โหมดอัตโนมัติเลือกเสียงแยกได้: จังหวะขาเข้าเสียงหนึ่ง จังหวะขาออกอีกเสียง ฟังแล้วรู้ทันทีว่าสัญญาณไหน",
   },
   {
     icon: "🤖",
@@ -79,6 +79,53 @@ const FEATURES = [
     icon: "🌙",
     title: "ดีไซน์ดาร์กคมชัด",
     text: "ธีมมืดทั้งแอป ดูสบายตา ใช้ได้ทั้งมือถือและแท็บเล็ต (iPad รองรับเต็มจอ)",
+  },
+];
+
+const VERSIONS = [
+  {
+    v: "2.2.4",
+    date: "27 ก.ย. 2026 · ปลาย",
+    items: [
+      "โหมดอัตโนมัติเลือกเสียงแยกได้: จังหวะขาเข้าใช้เสียงหนึ่ง จังหวะขาออกอีกเสียง — ฟังแล้วรู้ทันทีว่าสัญญาณไหน",
+      "Alert ที่ระบบสร้างให้อัตโนมัติเล่นเสียงตามชนิดสัญญาณที่มาจาก (ไม่ตกไปใช้เสียง default)",
+    ],
+  },
+  {
+    v: "2.2.3",
+    date: "27 ก.ย. 2026",
+    items: [
+      "โหมดอัตโนมัติเลือกประเภทสัญญาณได้: ขาเข้า (จังหวะซื้อ) หรือขาออก (สัญญาณอ่อนแรง/overbought)",
+      "ตั้ง alert ขาเข้าแล้วระบบสร้าง Alert จุดขายคู่กันที่ราคาเป้าที่เอนจินแนะนำ (เช่น เข้า 200 → จุดขาย 250) และแจ้งจังหวะออกให้เองเมื่อราคาถึง",
+      "อัปเดตหน้า landing ให้เล่าฟีเจอร์ขาเข้า–ขาออก",
+    ],
+  },
+  {
+    v: "2.2.2",
+    date: "27 ก.ย. 2026",
+    items: [
+      "แก้บั๊ก: กดแก้ไข Alert แล้วข้อมูลเดิมไม่โชว์ (local backend ไม่มี route GET /api/alerts/:id)",
+      "แก้บั๊ก: แจ้งเตือนจริงเล่นเสียง default ทับเสียงที่เลือก (Dashboard เล่นเสียงซ้ำเป็นเลเยอร์ที่สอง)",
+      "แก้บั๊ก: ปุ่ม “ทดสอบ” เล่นเสียง default แทนเสียงที่ตั้งไว้ของ alert นั้น",
+      "หน้า Alerts แสดงชื่อเสียงที่เลือกของแต่ละ alert (🔊)",
+    ],
+  },
+  {
+    v: "2.2.1",
+    date: "27 ก.ย. 2026",
+    items: [
+      "แก้บั๊ก “rows too big to fit cursorwindow” ตอนอัปโหลดเสียง: ย้ายการเก็บไฟล์เสียงจาก base64 ใน SQLite ไปเป็นไฟล์จริงใน document directory (expo-file-system) พร้อม migration ข้อมูลเดิมอัตโนมัติ",
+      "แก้บั๊ก: เปลี่ยนชื่อเสียงไม่ได้บน Android (Alert.prompt ไม่รองรับ) — เปลี่ยนเป็น dialog แบบ cross-platform",
+      "ลบไฟล์เสียงจริงทิ้งด้วยตอนลบรายการ (เดิมค้างในเครื่อง) · รองรับ content:// · ลิมิตไฟล์ 25 MB",
+    ],
+  },
+  {
+    v: "2.2.0",
+    date: "26–27 ก.ย. 2026",
+    items: [
+      "แจ้งเตือน 2 โหมด: 🤖 อัตโนมัติ (ระบบวิเคราะห์แล้วแจ้ง “จังหวะราคาเข้า” เอง ไม่ต้องตั้งราคา) และ 🎯 ตั้งราคาเอง",
+      "เอนจินวิเคราะห์ในตัว (SMA · RSI · โมเมนตัม · ความผันผวน) ทำงานในเครื่อง 100%",
+    ],
   },
 ];
 
@@ -102,7 +149,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center">
         <p className="mb-4 inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-400">
-          🆕 เวอร์ชัน 2.2.3 — แจ้งเตือน 2 โหมด ขาเข้า–ขาออก: ให้ระบบวิเคราะห์หาจังหวะเข้า/ออกให้อัตโนมัติ หรือตั้งราคาเอง
+          🆕 เวอร์ชัน 2.2.4 — โหมดอัตโนมัติเลือกเสียงแยกได้: จังหวะขาเข้าเสียงหนึ่ง จังหวะขาออกอีกเสียง
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
           ติดตามหุ้น & ETF
@@ -136,7 +183,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-3 text-sm text-neutral-500">
-          เวอร์ชัน 2.2.3 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
+          เวอร์ชัน 2.2.4 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
         </p>
       </section>
 
@@ -173,6 +220,30 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Version history */}
+      <section id="versions" className="mx-auto max-w-5xl px-6 py-10">
+        <h2 className="text-center text-2xl font-bold sm:text-3xl">ประวัติเวอร์ชัน</h2>
+        <p className="mt-2 text-center text-sm text-neutral-500">สิ่งที่แก้และเพิ่มในแต่ละรอบ เรียงจากใหม่ไปเก่า</p>
+        <div className="mx-auto mt-8 max-w-3xl space-y-4">
+          {VERSIONS.map((ver) => (
+            <div key={ver.v} className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-lg bg-emerald-500/15 px-3 py-1 text-sm font-extrabold text-emerald-400">v{ver.v}</span>
+                <span className="text-xs text-neutral-500">{ver.date}</span>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {ver.items.map((item, i) => (
+                  <li key={i} className="flex gap-2 text-sm leading-relaxed text-neutral-300">
+                    <span className="text-emerald-500">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </section>
 

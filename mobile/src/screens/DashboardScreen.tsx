@@ -130,9 +130,7 @@ export function DashboardScreen() {
             label={`แหล่งราคา (${status.data?.marketDataProvider ?? "…"})`}
             ok={status.data?.marketDataProviderHealthy ?? null}
           />
-          <Muted>
-            Push แบบ native (FCM) ยังไม่เปิดใช้ในเวอร์ชันนี้ — การแจ้งเตือนบนแอปจะดูได้จากประวัติด้านบน
-          </Muted>
+          <Muted>แจ้งเตือนราคาใช้ระบบแจ้งเตือนของเครื่องและเสียงที่เลือกไว้ โดยต้องอนุญาตการแจ้งเตือนในหน้าต่างของ Android/iOS</Muted>
         </Card>
       </View>
     </Screen>

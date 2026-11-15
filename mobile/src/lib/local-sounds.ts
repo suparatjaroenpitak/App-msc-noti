@@ -33,6 +33,10 @@ const KEY_VOLUME = "local.volume";
 const KEY_MUTE = "local.muted";
 const KEY_LAST_EVENT = "local.lastEventId";
 const KEY_ALERT_SOUND = "local.alertSound";
+/** เสียงของโหมดอัตโนมัติ แยกตามชนิดสัญญาณ: { ENTRY?: id, EXIT?: id } */
+const KEY_SIGNAL_SOUNDS = "local.signalSounds";
+
+export type SignalKind = "ENTRY" | "EXIT";
 
 const SOUNDS_DIR_NAME = "sounds";
 const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
@@ -284,6 +288,21 @@ export async function saveAlertSoundId(alertId: string, soundId: string | null):
   await AsyncStorage.setItem(KEY_ALERT_SOUND, JSON.stringify(map));
 }
 
+/** เสียงของโหมดอัตโนมัติแยกตามสัญญาณ: จังหวะขาเข้า/ขาออก (null = ใช้ค่าเริ่มต้นของเครื่อง) */
+export async function getSignalSoundId(kind: SignalKind): Promise<string | null> {
+  const raw = await AsyncStorage.getItem(KEY_SIGNAL_SOUNDS);
+  const map: Record<string, string | null> = raw ? JSON.parse(raw) : {};
+  return map[kind] ?? null;
+}
+
+export async function setSignalSoundId(kind: SignalKind, soundId: string | null): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEY_SIGNAL_SOUNDS);
+  const map: Record<string, string | null> = raw ? JSON.parse(raw) : {};
+  if (soundId === null) delete map[kind];
+  else map[kind] = soundId;
+  await AsyncStorage.setItem(KEY_SIGNAL_SOUNDS, JSON.stringify(map));
+}
+
 export async function getVolume(): Promise<number> {
   const raw = await AsyncStorage.getItem(KEY_VOLUME);
   const v = raw ? Number(raw) : 0.8;
@@ -355,11 +374,27 @@ export function stopPreview(): void {
   playerRef = null;
 }
 
-/** Fire-and-forget: play the default (or per-alert) sound for a freshly triggered alert. */
-export async function playForAlert(alertId?: string, alertSoundId?: string | null): Promise<void> {
+/**
+ * Fire-and-forget: play the right sound for a freshly triggered alert.
+ * ลำดับความสำคัญ: เสียงที่ส่งมาเอง → เสียงประจำสัญญาณ (ขาเข้า/ขาออก ของโหมดอัตโนมัติ)
+ * → เสียงประจำ alert → เสียงค่าเริ่มต้นของเครื่อง
+ */
+export async function playForAlert(
+  alertId?: string,
+  alertSoundId?: string | null,
+  signalKind?: SignalKind,
+): Promise<void> {
   try {
     if (await isMuted()) return;
-    let id = alertSoundId !== undefined ? alertSoundId : alertId ? await getAlertSoundId(alertId) : undefined;
+    let id =
+      alertSoundId !== undefined
+        ? alertSoundId
+        : signalKind
+          ? await getSignalSoundId(signalKind)
+          : alertId
+            ? await getAlertSoundId(alertId)
+            : undefined;
+    if (id === undefined && alertId) id = await getAlertSoundId(alertId);
     if (id === undefined) id = await getDefaultSoundId();
     const sounds = await listSounds();
     const sound = id ? sounds.find((s) => s.id === id) : undefined;

@@ -25,6 +25,7 @@ import {
 } from "./market";
 import { analyze, type EngineInput } from "./analysis-engine";
 import { playForAlert } from "../local-sounds";
+import { notifyPriceAlert } from "./notifications";
 
 /**
  * The entire backend, running on-device.
@@ -177,8 +178,8 @@ function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_n
       }
       const exitAlertId = uid("alr");
       db.runSync(
-        `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, created_at)
-         VALUES (?, ?, ?, 'EXIT', 'ABOVE_OR_EQUAL', ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, ?)`,
+        `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, auto_signal, created_at)
+         VALUES (?, ?, ?, 'EXIT', 'ABOVE_OR_EQUAL', ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, 'EXIT', ?)`,
         [exitAlertId, rule.assetId, `จุดขาย ${rule.symbol} (อัตโนมัติ)`, exitPrice, 45, rationale, nowIso],
       );
       db.runSync("UPDATE alert_rules SET exit_alert_id = ? WHERE id = ?", [exitAlertId, rule.id]);
@@ -194,8 +195,8 @@ function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_n
       }
       const entryAlertId = uid("alr");
       db.runSync(
-        `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, ?)`,
+        `INSERT INTO alert_rules (id, asset_id, name, type, condition, target_price, enabled, one_time, cooldown_minutes, notification_message, sound_id, alert_mode, analysis_alert_id, auto_signal, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?, NULL, 'MANUAL', NULL, 'ENTRY', ?)`,
         [
           entryAlertId,
           rule.assetId,
@@ -238,7 +239,7 @@ function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_n
         JSON.stringify({ mode: "AUTO", type: rule.type, priceAtTrigger: quote.price, entry, stop, target }),
       ],
     );
-    void playForAlert(rule.id);
+    void playForAlert(rule.id, undefined, isExitSignal ? "EXIT" : "ENTRY");
     const signalTitle = isExitSignal
       ? `📉 ${rule.symbol} มีจังหวะราคาออก — จุดขาย $${signalPrice.toFixed(2)}`
       : `📊 ${rule.symbol} มีจังหวะราคาเข้า — $${entry.toFixed(2)}`;
@@ -246,6 +247,7 @@ function runAutoModeChecks(rules: Array<AlertRuleRow & { symbol: string; asset_n
       ? `ผลวิเคราะห์อัตโนมัติ: ราคาปัจจุบัน $${quote.price.toFixed(2)} · จุดขายที่แนะนำ $${signalPrice.toFixed(2)}\nสร้าง Alert จุดขายให้แล้ว (เปิดอยู่ในหน้า Alerts)\nไม่ใช่คำแนะนำการลงทุน`
       : `ผลวิเคราะห์อัตโนมัติ: ราคาปัจจุบัน $${quote.price.toFixed(2)} · จุดเข้า $${entry.toFixed(2)} · ตัดขาดทุน $${(stop ?? 0).toFixed(2)} · เป้าหมาย $${(target ?? 0).toFixed(2)}\nสร้าง Alert ราคาเข้าและจุดขายให้แล้ว (เปิดอยู่ในหน้า Alerts)\nไม่ใช่คำแนะนำการลงทุน`;
     recordNotification(eventId, signalTitle, signalBody, "SENT");
+    void notifyPriceAlert({ alertId: rule.id, eventId, symbol: rule.symbol, title: signalTitle, body: signalBody });
 
     // oneTime → ปิด AUTO rule หลังแจ้งเตือนครั้งแรก (ค่าเริ่มต้น: เตือนจังหวะเดียวพอ)
     if (rule.oneTime) {
@@ -290,6 +292,7 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
       r.alert_mode AS mode,
       r.analysis_alert_id AS analysisAlertId,
       r.exit_alert_id AS exitAlertId,
+      r.auto_signal AS autoSignal,
       a.symbol, a.name AS asset_name, a.type AS asset_type
      FROM alert_rules r JOIN assets a ON a.id = r.asset_id
      WHERE r.enabled = 1`,
@@ -356,13 +359,15 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
       ],
     );
 
-    // Play the device-selected sound (respecting per-alert override via kv).
-    void playForAlert(rule.id);
+    // Play the device-selected sound — engine-created alerts carry their signal
+    // kind (ENTRY/EXIT), so the auto-mode per-signal sound takes priority.
+    void playForAlert(rule.id, undefined, rule.autoSignal ?? undefined);
 
     const dir = rule.condition === "ABOVE_OR_EQUAL" ? "ขึ้นถึง" : "ลงถึง";
     const title = `🔔 ${rule.symbol} ${dir} $${rule.targetPrice.toFixed(2)}`;
     const body = `ราคาปัจจุบัน $${quote.price.toFixed(2)} · ${rule.asset_name}${rule.notificationMessage ? `\n${rule.notificationMessage}` : ""}`;
     recordNotification(eventId, title, body, "SENT");
+    void notifyPriceAlert({ alertId: rule.id, eventId, symbol: rule.symbol, title, body });
 
     if (rule.oneTime) {
       db.runSync("UPDATE alert_rules SET enabled = 0 WHERE id = ?", [rule.id]);
@@ -375,18 +380,28 @@ export async function runLocalPollCycle(options?: { force?: boolean }): Promise<
 /** Poll state persisted in kv. */
 const POLL_KEY = "poll.lastRunAt";
 
-export function maybeAutoPoll(): void {
+let pollInFlight: Promise<{ evaluated: number; triggered: number }> | null = null;
+
+export async function maybeAutoPoll(options?: { force?: boolean }): Promise<{ evaluated: number; triggered: number } | null> {
   const last = Number(kvGet(POLL_KEY) ?? "0");
   const now = Date.now();
-  if (now - last >= 30_000) {
-    kvSet(POLL_KEY, String(now));
-    prefetchRealQuotes();
-    try {
-      runLocalPollCycle();
-    } catch {
-      // never crash the UI for background polling
-    }
-  }
+  if (!options?.force && now - last < 30_000) return null;
+  if (pollInFlight) return pollInFlight;
+
+  // Write before starting so a slow quote request cannot start duplicate cycles.
+  kvSet(POLL_KEY, String(now));
+  // `force` here only bypasses the 30-second throttle. The market-hours guard
+  // remains active; callers that explicitly need a forced market check should
+  // call runLocalPollCycle({ force: true }) directly (for tests/tools).
+  pollInFlight = runLocalPollCycle()
+    .catch((err) => {
+      console.warn("[local-backend] price poll failed", err);
+      return { evaluated: 0, triggered: 0 };
+    })
+    .finally(() => {
+      pollInFlight = null;
+    });
+  return pollInFlight;
 }
 
 // ---------- quote source: REAL ONLY (no simulated mode) ----------
@@ -900,9 +915,17 @@ export async function handleLocalApi<T>(method: string, path: string, body?: unk
       return ok({ alert: { id: newId } } as unknown as T);
     } else if (action === "test") {
       // Device-local test: play THIS alert's chosen sound (fallback: default) + write a notification log.
-      // There are no push devices in offline mode — "sent" counts the local playback.
+      // The local system notification is also sent so permission/channel setup can be verified.
       void playForAlert(id);
-      recordNotification(null, "ทดสอบการแจ้งเตือน", "นี่คือการแจ้งเตือนทดสอบ (เล่นเสียงในเครื่อง) — โหมด offline ไม่มี push", "SENT");
+      const asset = db.getFirstSync<{ symbol: string }>(
+        "SELECT a.symbol FROM alert_rules r JOIN assets a ON a.id = r.asset_id WHERE r.id = ?",
+        [id],
+      );
+      const testEventId = uid("test");
+      const testTitle = "ทดสอบการแจ้งเตือน";
+      const testBody = `นี่คือการแจ้งเตือนทดสอบ${asset?.symbol ? ` — ${asset.symbol}` : ""}`;
+      recordNotification(null, testTitle, testBody, "SENT");
+      void notifyPriceAlert({ alertId: id, eventId: testEventId, symbol: asset?.symbol ?? "", title: testTitle, body: testBody });
       return ok({ sent: 1, failed: 0, tested: true } as unknown as T);
     }
     return ok({ updated: true } as unknown as T);

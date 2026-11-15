@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stock Alert",
     "slug": "stock-alert-mobile",
-    "version": "2.2.3",
+    "version": "2.2.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.stockalert.mobile",
-      "buildNumber": "12",
+      "buildNumber": "14",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -33,7 +33,7 @@
     },
     "android": {
       "package": "com.stockalert.mobile",
-      "versionCode": 11,
+      "versionCode": 13,
       "adaptiveIcon": {
         "backgroundColor": "#0f1117",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -42,6 +42,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -54,6 +55,7 @@
     "plugins": [
       "expo-audio",
       "expo-document-picker",
+      "expo-notifications",
       "expo-sqlite"
     ],
     "owner": "asdrt009s-team",
