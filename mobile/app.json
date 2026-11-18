@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stock Alert",
     "slug": "stock-alert-mobile",
-    "version": "2.2.5",
+    "version": "2.2.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.stockalert.mobile",
-      "buildNumber": "14",
+      "buildNumber": "16",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -33,7 +33,7 @@
     },
     "android": {
       "package": "com.stockalert.mobile",
-      "versionCode": 13,
+      "versionCode": 14,
       "adaptiveIcon": {
         "backgroundColor": "#0f1117",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -54,6 +54,7 @@
     },
     "plugins": [
       "expo-audio",
+      "expo-background-task",
       "expo-document-picker",
       "expo-notifications",
       "expo-sqlite"

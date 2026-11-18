@@ -84,6 +84,14 @@ const FEATURES = [
 
 const VERSIONS = [
   {
+    v: "2.2.6",
+    date: "16 พ.ย. 2026",
+    items: [
+      "เพิ่มการแจ้งเตือนระบบ Android/iOS เมื่อราคาถึงเงื่อนไขที่ตั้งไว้",
+      "เพิ่มการตรวจราคาเบื้องหลังด้วย Expo Background Task และแก้ปัญหาแจ้งเตือนไม่ขึ้น",
+    ],
+  },
+  {
     v: "2.2.4",
     date: "27 ก.ย. 2026 · ปลาย",
     items: [
@@ -149,7 +157,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center">
         <p className="mb-4 inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-400">
-          🆕 เวอร์ชัน 2.2.4 — โหมดอัตโนมัติเลือกเสียงแยกได้: จังหวะขาเข้าเสียงหนึ่ง จังหวะขาออกอีกเสียง
+          🆕 เวอร์ชัน 2.2.6 — แจ้งเตือนราคาอัตโนมัติบน Android/iOS
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
           ติดตามหุ้น & ETF
@@ -183,7 +191,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-3 text-sm text-neutral-500">
-          เวอร์ชัน 2.2.4 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~88 MB
+          เวอร์ชัน 2.2.6 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~90 MB
         </p>
       </section>
 

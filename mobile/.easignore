@@ -2,3 +2,7 @@ node_modules
 apk
 .git
 .next
+*.apk
+*.ipa
+.expo
+.expo-export-check

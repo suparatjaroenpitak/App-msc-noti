@@ -6,6 +6,7 @@ import { ConnectionProvider } from "./src/auth";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { ensureBackend, initQuoteSource, maybeAutoPoll } from "./src/lib/local/backend";
 import { configureLocalNotifications, requestLocalNotificationPermission } from "./src/lib/local/notifications";
+import { registerBackgroundPriceTask } from "./src/lib/local/background";
 
 export default function App() {
   // Boot the on-device backend (SQLite + seed + engines) as early as possible.
@@ -14,6 +15,7 @@ export default function App() {
     try {
       ensureBackend();
       initQuoteSource();
+      void registerBackgroundPriceTask();
       void configureLocalNotifications()
         .then(() => {
           if (!cancelled) void requestLocalNotificationPermission();

@@ -54,6 +54,7 @@ export async function notifyPriceAlert(input: {
         title: input.title,
         body: input.body,
         sound: "default",
+        ...(Platform.OS === "android" ? { channelId: "price-alerts" } : {}),
         data: { alertId: input.alertId, eventId: input.eventId, symbol: input.symbol },
       },
       trigger: null,
