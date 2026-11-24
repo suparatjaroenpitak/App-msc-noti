@@ -21,7 +21,7 @@ function IpaDownloadButton() {
           <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
             <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
           </svg>
-          ดาวน์โหลดสำหรับ iOS (.ipa) · ~{sizeMb} MB
+          ดาวน์โหลดสำหรับ iOS Simulator (.ipa) · ~{sizeMb} MB
         </a>
       </div>
     );
@@ -32,10 +32,10 @@ function IpaDownloadButton() {
         <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
           <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
         </svg>
-        ดาวน์โหลดสำหรับ iOS (.ipa)
+        ดาวน์โหลดสำหรับ iOS Simulator (.ipa)
       </span>
       <p className="mt-2 text-sm text-amber-500/90">
-        ⏳ ไฟล์ .ipa กำลังเตรียม build ผ่าน Apple/Expo EAS — ปุ่มจะใช้งานได้อัตโนมัติเมื่อไฟล์พร้อม
+        ⏳ ไฟล์ .ipa ยังไม่พร้อมดาวน์โหลด
       </p>
     </div>
   );
@@ -85,10 +85,12 @@ const FEATURES = [
 const VERSIONS = [
   {
     v: "2.2.6",
-    date: "16 พ.ย. 2026",
+    date: "24 พ.ย. 2026",
     items: [
       "เพิ่มการแจ้งเตือนระบบ Android/iOS เมื่อราคาถึงเงื่อนไขที่ตั้งไว้",
       "เพิ่มการตรวจราคาเบื้องหลังด้วย Expo Background Task และแก้ปัญหาแจ้งเตือนไม่ขึ้น",
+      "แก้เสียงแจ้งเตือน Android: เปลี่ยน notification channel ใหม่ พร้อมเสียงระบบระดับสูงและสั่น",
+      "อัปเดตไฟล์ติดตั้ง APK/IPA รุ่นใหม่บนหน้า Landing แล้ว",
     ],
   },
   {
@@ -157,7 +159,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-10 text-center">
         <p className="mb-4 inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-400">
-          🆕 เวอร์ชัน 2.2.6 — แจ้งเตือนราคาอัตโนมัติบน Android/iOS
+          🆕 เวอร์ชัน 2.2.6 — แจ้งเตือนราคาอัตโนมัติพร้อมเสียงบน Android/iOS
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
           ติดตามหุ้น & ETF
@@ -181,7 +183,8 @@ export default function LandingPage() {
             ดาวน์โหลดสำหรับ Android (.apk)
           </a>
           <a
-            href="#ios"
+            href="/downloads/StockAlert-release.ipa"
+            download
             className="flex w-full max-w-xs items-center justify-center gap-3 rounded-2xl border border-neutral-700 px-8 py-4 text-lg font-bold text-neutral-200 transition hover:border-neutral-500 sm:w-auto"
           >
             <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden>
@@ -191,7 +194,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-3 text-sm text-neutral-500">
-          เวอร์ชัน 2.2.6 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~90 MB
+          เวอร์ชัน 2.2.6 · รองรับ Android 7.0+ (arm64 / armv7 / x86) · ขนาดไฟล์ ~90 MB · แจ้งเตือนพร้อมเสียงระบบ
         </p>
       </section>
 
@@ -265,18 +268,18 @@ export default function LandingPage() {
               </svg>
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-bold sm:text-2xl">เวอร์ชัน iOS / iPad (.ipa)</h2>
+              <h2 className="text-xl font-bold sm:text-2xl">เวอร์ชัน iOS Simulator (.ipa)</h2>
               <p className="mt-2 text-sm leading-relaxed text-neutral-400">
-                โค้ดรองรับ iOS และ iPad ครบทุกฟังก์ชัน (ฐานข้อมูล/เสียง/การแจ้งเตือน ทำงานในเครื่องเหมือน Android ทุกประการ)
+                ไฟล์รุ่นนี้เป็น iOS Simulator build สำหรับทดสอบฐานข้อมูล เสียง และการแจ้งเตือนในเครื่อง โดยใช้โค้ดรุ่นเดียวกับ APK ใหม่
               </p>
 
               {/* IPA download — file is optional; show availability dynamically */}
               <IpaDownloadButton />
 
               <ul className="mt-4 space-y-1 text-sm text-neutral-500">
-                <li>• รองรับ iPhone (iOS 15+) และ iPad แบบเต็มจอ</li>
-                <li>• การติดตั้งไฟล์ .ipa บนเครื่องจริงต้องใช้เครื่อง Mac (Apple Configurator/Xcode) หรือผ่าน TestFlight</li>
-                <li>• ไฟล์ .ipa ไม่สามารถติดตั้งตรง ๆ บน iPhone ได้เหมือน APK — ต้องผ่านเครื่องมือของ Apple เสมอ</li>
+                <li>• ใช้ทดสอบบน iOS Simulator ผ่าน Xcode บนเครื่อง Mac</li>
+                <li>• การติดตั้งบน iPhone จริงต้องใช้ device-signed build และ Apple Distribution Certificate</li>
+                <li>• ไฟล์ .ipa ไม่สามารถติดตั้งตรง ๆ บน iPhone ได้เหมือน APK</li>
               </ul>
             </div>
           </div>

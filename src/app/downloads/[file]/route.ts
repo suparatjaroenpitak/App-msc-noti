@@ -18,7 +18,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ file: string }
   const filePath = path.join(DOWNLOADS_DIR, file);
   if (!existsSync(filePath)) {
     return NextResponse.json(
-      { ok: false, error: { code: "NOT_FOUND", message: "File not built yet — copy mobile/apk/StockAlert-release.apk to public/downloads/" } },
+      { ok: false, error: { code: "NOT_FOUND", message: "File not built yet — copy the latest StockAlert-release.apk/.ipa into public/downloads/" } },
       { status: 404 },
     );
   }
