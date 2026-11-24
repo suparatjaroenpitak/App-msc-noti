@@ -3,6 +3,11 @@ import { Platform } from "react-native";
 
 let configured = false;
 
+// Android stores channel sound settings permanently after the channel is first
+// created. Use a new id so devices that previously created a silent channel
+// receive the repaired audible configuration.
+const PRICE_ALERT_CHANNEL_ID = "price-alerts-v2";
+
 /** Configure the native notification presentation used by local price alerts. */
 export async function configureLocalNotifications(): Promise<void> {
   if (configured) return;
@@ -17,11 +22,16 @@ export async function configureLocalNotifications(): Promise<void> {
   });
 
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("price-alerts", {
-      name: "Price alerts",
+    await Notifications.setNotificationChannelAsync(PRICE_ALERT_CHANNEL_ID, {
+      name: "Price alerts (เสียง)",
       importance: Notifications.AndroidImportance.HIGH,
       sound: "default",
       vibrationPattern: [0, 250, 150, 250],
+      enableVibrate: true,
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.NOTIFICATION,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      },
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
@@ -54,7 +64,7 @@ export async function notifyPriceAlert(input: {
         title: input.title,
         body: input.body,
         sound: "default",
-        ...(Platform.OS === "android" ? { channelId: "price-alerts" } : {}),
+        ...(Platform.OS === "android" ? { channelId: PRICE_ALERT_CHANNEL_ID } : {}),
         data: { alertId: input.alertId, eventId: input.eventId, symbol: input.symbol },
       },
       trigger: null,
